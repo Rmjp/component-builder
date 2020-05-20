@@ -1,4 +1,27 @@
 class Signal:
+    """
+    >>> s = Signal(26,6)
+    >>> str(s)
+    '011010'
+
+    >>> str(s.slice(slice(1,2)))
+    '1'
+    >>> str(s.slice(slice(0,2)))
+    '10'
+    >>> str(s.slice(slice(1,5)))
+    '1101'
+    >>> str(s.slice(slice(2,6)))
+    '0110'
+    >>> s.set_slice(slice(2,6), Signal(8,4))
+    >>> str(s)
+    '100010'
+    >>> s = Signal(26,6); s.set_slice(slice(2,3), Signal(1,1))
+    >>> str(s)
+    '011110'
+    >>> s = Signal(26,6); s.set_slice(slice(0,4), Signal(3,4))
+    >>> str(s)
+    '010011'
+    """
     def __init__(self, value, width=1):
         self.value = value
         self.width = width
@@ -10,8 +33,36 @@ class Signal:
         return Signal(self.value, new_width)
     
     def __eq__(self, other):
+        if other == None:
+            return False
         return ((self.width == other.width) and
                 (self.value == other.value))
+
+    def __str__(self):
+        fmt = '{:0%db}' % (self.width,)
+        return fmt.format(self.value)
+
+    @staticmethod
+    def from_string(s):
+        return Signal(int(s,2), len(s))
+    
+    def slice(self, s):
+        rev = str(self)[::-1]
+        return Signal.from_string((rev[s])[::-1])
+
+    def set_slice(self, s, value):
+        slen = s.stop - s.start
+        fmt = '{:0%db}' % (slen)
+        vstr = fmt.format(value.value)
+        rev_str = list(str(self)[::-1])
+        rev_str[s] = list(vstr[::-1])
+        self.value = int(''.join(rev_str[::-1]),2)
+
+    def __getitem__(self,key):
+        if type(key) == slice:
+            return self.slice(key)
+        else:
+            return self.slice(slice(key,key+1))
 
 Signal.F = Signal(0)
 Signal.T = Signal(1)
@@ -23,12 +74,18 @@ class Component:
             self.component = component
             self.in_dict = {}
             self.out_dict = {}
+            self.in_wires = {}
+            self.out_wires = {}
             self.in_list = []
             self.out_list = []
             self.indegree = 0
             self.outdegree = 0
 
+    def init_parts(self):
+        pass
+            
     def __init__(self, **kwargs):
+        self.init_parts()
         self.internal_components = None
         self.wire_assignments = kwargs
         self.graph = None
@@ -41,7 +98,7 @@ class Component:
             e = self.edges[estr]
         else:
             e = {
-                'src': None,
+                'src': [],
                 'dest': [],
                 'value': None,
             }
@@ -59,7 +116,7 @@ class Component:
             e = self.edges[wire.get_key()]
             for vid in e['dest']:
                 self.nodes[vid].current_indegree -= 1
-        
+                    
         src_list = []
         for uid in self.nodes:
             u = self.nodes[uid]
@@ -104,10 +161,10 @@ class Component:
                 actual_wire = component.get_actual_edge(wire.name)
                 actual_key = actual_wire.get_key()
                 node.in_dict[key] = actual_key
+                node.in_wires[key] = actual_wire
 
                 e = self.get_or_create_edge(actual_key)
                 e['dest'].append(nid)
-                node.indegree += 1
                 node.in_list.append(e)
                 
             for wire in component.OUT:
@@ -115,13 +172,25 @@ class Component:
                 actual_wire = component.get_actual_edge(wire.name)
                 actual_key = actual_wire.get_key()
                 node.out_dict[key] = actual_key
+                node.out_wires[key] = actual_wire
                 
                 e = self.get_or_create_edge(actual_key)
-                if e['src'] != None:
-                    raise Exception('Too many sources for ' + actual_key + ' as ' + key)
-                e['src'] = nid
-                node.outdegree += 1
+                e['src'].append(nid)
                 node.out_list.append(e)
+
+        for estr in self.edges:
+            e = self.edges[estr]
+
+            for nid in e['dest']:
+                u = self.nodes[nid]
+                if e['src'] != []:
+                    u.indegree += len(e['src'])
+                else:
+                    u.indegree += 1
+                
+            for nid in e['src']:
+                u = self.nodes[nid]
+                u.outdegree += len(e['dest'])
                 
         self.top_sort()
 
@@ -138,7 +207,7 @@ class Component:
             name = wire.name
             if name not in self.wire_assignments:
                 raise Exception('Incomplete wire configuration: ' + name)
-        
+
     def process(self, **kwargs):
         if not self.graph:
             self.build_graph()
@@ -150,11 +219,13 @@ class Component:
         input_kwargs = {}
         for u in self.topo_ordering:
             for k in u.in_dict:
-                input_kwargs[k[0]] = self.edges[u.in_dict[k]]['value']
+                wire = u.in_wires[k]
+                input_kwargs[k[0]] = wire.slice_signal(self.edges[u.in_dict[k]]['value'])
             output = u.component.process(**input_kwargs)
             for k,v in zip(u.component.OUT, output):
                 estr = k.get_key()
-                self.edges[u.out_dict[estr]]['value'] = v
+                wire = u.out_wires[estr]
+                self.edges[u.out_dict[estr]]['value'] = wire.save_to_signal(self.edges[u.out_dict[estr]]['value'],v)
 
         return [self.edges[wire.get_key()]['value'] for wire in self.OUT]
 
@@ -165,12 +236,34 @@ class Component:
         return self.process(**kwargs)[0]
 
 class Wire:
-    def __init__(self, name, width=1):
+    def __init__(self, name, width=1, slice=None):
         self.name = name
         self.width = width
-
+        self.slice = slice
+        
     def get_key(self):
         return (self.name, self.width)
+
+    def __getitem__(self, key):
+        if type(key) == slice:
+            return Wire(self.name, self.width, key)
+        else:
+            return Wire(self.name, self.width, slice(key,key+1))
+
+    def slice_signal(self, signal):
+        if self.slice:
+            return signal.slice(self.slice)
+        else:
+            return signal
+
+    def save_to_signal(self, signal, value):
+        if self.slice:
+            if signal == None:
+                signal = Signal(0, self.width)
+            signal.set_slice(self.slice, value)
+            return signal
+        else:
+            return value
     
 class WireFactory:
     __instances = None
