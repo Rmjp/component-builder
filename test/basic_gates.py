@@ -80,3 +80,9 @@ class FullAdder(Component):
            out=w.carry_out),
     ]
 
+class And2(Component):
+    IN = [w(2).a, w(2).b]
+    OUT = [w(2).out]
+
+    PARTS = [
+    ]

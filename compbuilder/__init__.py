@@ -55,8 +55,8 @@ class Component:
             u = self.nodes[uid]
             u.current_indegree = u.indegree
 
-        for estr in self.IN:
-            e = self.edges[estr]
+        for wire in self.IN:
+            e = self.edges[wire.get_key()]
             for vid in e['dest']:
                 self.nodes[vid].current_indegree -= 1
         
@@ -99,22 +99,26 @@ class Component:
 
             self.nodes[nid] = node
 
-            for estr in component.IN:
-                actual_estr = component.get_actual_edge(estr)
-                node.in_dict[estr] = actual_estr
+            for wire in component.IN:
+                key = wire.get_key()
+                actual_wire = component.get_actual_edge(wire.name)
+                actual_key = actual_wire.get_key()
+                node.in_dict[key] = actual_key
 
-                e = self.get_or_create_edge(actual_estr)
+                e = self.get_or_create_edge(actual_key)
                 e['dest'].append(nid)
                 node.indegree += 1
                 node.in_list.append(e)
                 
-            for estr in component.OUT:
-                actual_estr = component.get_actual_edge(estr)
-                node.out_dict[estr] = actual_estr
+            for wire in component.OUT:
+                key = wire.get_key()
+                actual_wire = component.get_actual_edge(wire.name)
+                actual_key = actual_wire.get_key()
+                node.out_dict[key] = actual_key
                 
-                e = self.get_or_create_edge(actual_estr)
+                e = self.get_or_create_edge(actual_key)
                 if e['src'] != None:
-                    raise Exception('Too many sources for ' + actual_estr + ' as ' + estr)
+                    raise Exception('Too many sources for ' + actual_key + ' as ' + key)
                 e['src'] = nid
                 node.outdegree += 1
                 node.out_list.append(e)
@@ -130,26 +134,29 @@ class Component:
         return self.wire_assignments[estr]
         
     def validate_config(self):
-        for estr in self.IN + self.OUT:
-            if estr not in self.wire_assignments:
-                raise Exception('Incomplete wire configuration: ' + estr)
+        for wire in self.IN + self.OUT:
+            name = wire.name
+            if name not in self.wire_assignments:
+                raise Exception('Incomplete wire configuration: ' + name)
         
     def process(self, **kwargs):
         if not self.graph:
             self.build_graph()
             
-        for estr in self.IN:
-            self.edges[estr]['value'] = kwargs[estr]
+        for wire in self.IN:
+            key = wire.get_key()
+            self.edges[key]['value'] = kwargs[wire.name]
 
         input_kwargs = {}
         for u in self.topo_ordering:
             for k in u.in_dict:
-                input_kwargs[k] = self.edges[u.in_dict[k]]['value']
+                input_kwargs[k[0]] = self.edges[u.in_dict[k]]['value']
             output = u.component.process(**input_kwargs)
             for k,v in zip(u.component.OUT, output):
-                self.edges[u.out_dict[k]]['value'] = v
+                estr = k.get_key()
+                self.edges[u.out_dict[estr]]['value'] = v
 
-        return [self.edges[k]['value'] for k in self.OUT]
+        return [self.edges[wire.get_key()]['value'] for wire in self.OUT]
 
     def eval(self, **kwargs):
         return self.process(**kwargs)
@@ -157,25 +164,43 @@ class Component:
     def eval_single(self, **kwargs):
         return self.process(**kwargs)[0]
 
+class Wire:
+    def __init__(self, name, width=1):
+        self.name = name
+        self.width = width
+
+    def get_key(self):
+        return (self.name, self.width)
+    
 class WireFactory:
-    __instance = None
+    __instances = None
     
     @staticmethod
-    def get_instance():
-        if WireFactory.__instance == None:
+    def get_instance(width=1):
+        if WireFactory.__instances == None:
             WireFactory()
 
-        return WireFactory.__instance
+        if width not in WireFactory.__instances:
+            WireFactory.__instances[width] = WireFactory(width)
 
-    def __getattr__(self, name):
-        return name
+        return WireFactory.__instances[width]
+
+    def __call__(self, width):
+        return WireFactory.get_instance(width)
     
-    def __init__(self):
-        if WireFactory.__instance != None:
+    def __getattr__(self, name):
+        return Wire(name, self.width)
+    
+    def __init__(self, width=1):
+        if (WireFactory.__instances != None) and (width in WireFactory.__instances):
             raise Exception('You should not try to instatiate WireFactory directly')
 
-        WireFactory.__instance = self
-        self.wire_dict = {}
+        self.width = width
+
+        if WireFactory.__instances == None:
+            WireFactory.__instances = {}
+
+        WireFactory.__instances[width] = self
         
 w = WireFactory.get_instance()
 
