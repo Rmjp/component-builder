@@ -201,8 +201,9 @@ class Component:
             for nid in e['src']:
                 u = self.nodes[nid]
                 u.outdegree += len(e['dest'])
-                
-        self.top_sort()
+
+        if self.PARTS:
+            self.top_sort()
 
         self.graph = {
             'nodes': self.nodes,
