@@ -143,15 +143,14 @@ class Component:
             raise Exception('Loop in component parts found')
     
     def build_graph(self):
-        self.nodes = {}
-        self.edges = {}
-        self.n = len(self.PARTS)
-
-        self.internal_components = []
-
         if not getattr(self, 'PARTS', None):
             self.PARTS = []
         
+        self.nodes = {}
+        self.edges = {}
+        self.internal_components = []
+        self.n = len(self.PARTS)
+
         ncount = 0
         for p in self.PARTS:
             ncount += 1
