@@ -8,7 +8,7 @@ F = Signal.F
 
 from compbuilder.tracing import report_parts
 
-class TestListParts(unittest.TestCase):
+class TestReportParts(unittest.TestCase):
     def setUp(self):
         self.not_gate = Not()
         self.and_gate = And()
@@ -111,6 +111,22 @@ Xor
         
         self.assertEqual(report_parts(self.xor_gate, level=3).split('\n'),
                          expected_xor_output.split('\n'))
+
+
+class TestInternalComponents(unittest.TestCase):
+    def setUp(self):
+        self.not_gate = Not()
+        self.and_gate = And()
+        self.xor_gate = Xor()
+
+    def test_get_internal_components(self):
+        self.assertEqual(self.not_gate['Nand-1'],
+                         self.not_gate.internal_components[0])
+
+        self.assertEqual(self.xor_gate['Nand-5-2-1'],
+                         self.xor_gate.internal_components[4]
+                         .internal_components[1]
+                         .internal_components[0])
 
 
 if __name__ == '__main__':

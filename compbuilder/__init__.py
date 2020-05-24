@@ -257,6 +257,26 @@ class Component:
     def get_gate_name(self):
         return self.__class__.__name__
 
+    def __getitem__(self, key):
+        self.initialize()
+        index_items = key.split('-')
+        if len(index_items) <= 1:
+            raise Exception('Internal component access error with key: ' + key)
+
+        try:
+            indices = [int(x) for x in index_items[1:]]
+        except:
+            raise Exception('Internal component access error with key: ' + key)
+
+        component = self
+        for i in indices:
+            component = component.internal_components[i-1]
+
+        if component.get_gate_name() != index_items[0]:
+            raise Exception('Internal component access error gate type mismatch: ' + key + ' with ' + component.get_gate_name())
+
+        return component
+    
     
 class Wire:
     def __init__(self, name, width=1, slice=None):
