@@ -91,6 +91,7 @@ class Component:
         self.internal_components = None
         self.wire_assignments = kwargs
         self.graph = None
+        self.is_initialized = False
 
     def shallow_clone(self):
         return type(self)(**self.wire_assignments)
@@ -219,10 +220,17 @@ class Component:
             if name not in self.wire_assignments:
                 raise Exception('Incomplete wire configuration: ' + name)
 
-    def process(self, **kwargs):
-        if not self.graph:
-            self.build_graph()
+    def initialize(self):
+        if self.is_initialized:
+            return
+
+        self.build_graph()
+        
+        self.is_initialized = True
             
+    def process(self, **kwargs):
+        self.initialize()
+        
         for wire in self.IN:
             key = wire.get_key()
             self.edges[key]['value'] = kwargs[wire.name]
@@ -248,7 +256,7 @@ class Component:
 
     def get_gate_name(self):
         return self.__class__.__name__
-    
+
     
 class Wire:
     def __init__(self, name, width=1, slice=None):

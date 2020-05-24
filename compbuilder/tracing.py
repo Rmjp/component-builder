@@ -25,10 +25,8 @@ def report_parts(component, level=1):
                 
             for c in component.internal_components:
                 recurse(c, indent+1, level-1, output)
-    
-    if not component.internal_components:
-        component.build_graph()
-        
+
+    component.initialize()
     assign_internal_component_names(component, level=level)
     component.component_name = component.get_gate_name()
 
