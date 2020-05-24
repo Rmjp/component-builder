@@ -86,6 +86,8 @@ class Component:
             
     def __init__(self, **kwargs):
         self.init_parts()
+
+        self.component_name = ''
         self.internal_components = None
         self.wire_assignments = kwargs
         self.graph = None
@@ -144,6 +146,8 @@ class Component:
         self.nodes = {}
         self.edges = {}
         self.n = len(self.PARTS)
+
+        self.internal_components = []
         
         ncount = 0
         for p in self.PARTS:
@@ -152,6 +156,11 @@ class Component:
 
             p.validate_config()
             component = p.shallow_clone()
+            if component.PARTS:
+                component.build_graph()
+            
+            self.internal_components.append(component)
+
             node = self.Node(nid, component)
 
             self.nodes[nid] = node
@@ -235,6 +244,10 @@ class Component:
     def eval_single(self, **kwargs):
         return self.process(**kwargs)[0]
 
+    def get_gate_name(self):
+        return self.__class__.__name__
+    
+    
 class Wire:
     def __init__(self, name, width=1, slice=None):
         self.name = name
