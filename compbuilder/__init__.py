@@ -93,6 +93,9 @@ class Component:
         self.graph = None
         self.is_initialized = False
 
+        self.preprocessing_hooks = []
+        self.postprocessing_hooks = []
+
     def shallow_clone(self):
         return type(self)(**self.wire_assignments)
 
@@ -230,6 +233,9 @@ class Component:
             
     def process(self, **kwargs):
         self.initialize()
+
+        for f in self.preprocessing_hooks:
+            f(self)
         
         for wire in self.IN:
             key = wire.get_key()
@@ -246,6 +252,9 @@ class Component:
                 wire = u.out_wires[estr]
                 self.edges[u.out_dict[estr]]['value'] = wire.save_to_signal(self.edges[u.out_dict[estr]]['value'],v)
 
+        for f in self.postprocessing_hooks:
+            f(self)
+                
         return [self.edges[wire.get_key()]['value'] for wire in self.OUT]
 
     def eval(self, **kwargs):
@@ -257,6 +266,12 @@ class Component:
     def get_gate_name(self):
         return self.__class__.__name__
 
+    def add_preprocessing_hook(self, f):
+        self.preprocessing_hooks.append(f)
+    
+    def add_postprocessing_hook(self, f):
+        self.postprocessing_hooks.append(f)
+    
     def __getitem__(self, key):
         self.initialize()
         index_items = key.split('-')
