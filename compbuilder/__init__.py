@@ -148,6 +148,9 @@ class Component:
         self.n = len(self.PARTS)
 
         self.internal_components = []
+
+        if not getattr(self, 'PARTS', None):
+            self.PARTS = []
         
         ncount = 0
         for p in self.PARTS:
@@ -156,8 +159,7 @@ class Component:
 
             p.validate_config()
             component = p.shallow_clone()
-            if component.PARTS:
-                component.build_graph()
+            component.build_graph()
             
             self.internal_components.append(component)
 
