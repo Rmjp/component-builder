@@ -42,6 +42,9 @@ class Signal:
         fmt = '{:0%db}' % (self.width,)
         return fmt.format(self.value)
 
+    def __repr__(self):
+        return str(self)
+
     @staticmethod
     def from_string(s):
         return Signal(int(s,2), len(s))
