@@ -6,7 +6,7 @@ from test.basic_gates import Nand, Not, And, Or, Xor, HalfAdder, FullAdder
 T = Signal.T
 F = Signal.F
 
-from compbuilder.tracing import report_parts
+from compbuilder.tracing import report_parts, trace
 
 class TestReportParts(unittest.TestCase):
     def setUp(self):
@@ -127,6 +127,28 @@ class TestInternalComponents(unittest.TestCase):
                          self.xor_gate.internal_components[4]
                          .internal_components[1]
                          .internal_components[0])
+
+class TestTracing(unittest.TestCase):
+    def setUp(self):
+        self.not_gate = Not()
+        self.and_gate = And()
+        self.xor_gate = Xor()
+
+    def test_not_trace(self):
+        trace(self.not_gate, {'a':'0011',}, [], level=1)
+
+    def test_and_trace(self):
+        trace(self.and_gate, {'a':'0011', 'b':'0101',}, [])
+
+    def test_and_trace_level2(self):
+        trace(self.and_gate, {'a':'0011', 'b':'0101',}, [], level=2)
+
+    def test_xor_trace(self):
+        trace(self.xor_gate, {'a':'0011', 'b':'0101'}, [])
+
+    def test_xor_trace_level2(self):
+        trace(self.xor_gate, {'a':'0011', 'b':'0101'}, [], level=2)
+
 
 
 if __name__ == '__main__':

@@ -93,8 +93,8 @@ class Component:
         self.graph = None
         self.is_initialized = False
 
-        self.preprocessing_hooks = []
-        self.postprocessing_hooks = []
+        self.preprocessing_hooks = {}
+        self.postprocessing_hooks = {}
 
     def shallow_clone(self):
         return type(self)(**self.wire_assignments)
@@ -162,7 +162,7 @@ class Component:
 
             p.validate_config()
             component = p.shallow_clone()
-            component.build_graph()
+            component.initialize()
             
             self.internal_components.append(component)
 
@@ -234,9 +234,6 @@ class Component:
     def process(self, **kwargs):
         self.initialize()
 
-        for f in self.preprocessing_hooks:
-            f(self)
-        
         for wire in self.IN:
             key = wire.get_key()
             self.edges[key]['value'] = kwargs[wire.name]
@@ -246,36 +243,51 @@ class Component:
             for k in u.in_dict:
                 wire = u.in_wires[k]
                 input_kwargs[k[0]] = wire.slice_signal(self.edges[u.in_dict[k]]['value'])
-            output = u.component.process(**input_kwargs)
+            output = u.component.eval(**input_kwargs)
+
             for k,v in zip(u.component.OUT, output):
                 estr = k.get_key()
                 wire = u.out_wires[estr]
                 self.edges[u.out_dict[estr]]['value'] = wire.save_to_signal(self.edges[u.out_dict[estr]]['value'],v)
 
-        for f in self.postprocessing_hooks:
-            f(self)
-                
         return [self.edges[wire.get_key()]['value'] for wire in self.OUT]
 
+    def _process(self, **kwargs):
+        for f in self.preprocessing_hooks.values():
+            f(self, kwargs)
+
+        output = self.process(**kwargs)
+            
+        for f in self.postprocessing_hooks.values():
+            f(self, kwargs, output)
+
+        self.trace_input_signals = kwargs
+        self.trace_output_signals = {k.name:v for k,v in zip(self.OUT, output)}
+        self.trace_signals = {**kwargs, **self.trace_output_signals}
+            
+        return output
+    
     def eval(self, **kwargs):
-        return self.process(**kwargs)
+        return self._process(**kwargs)
     
     def eval_single(self, **kwargs):
-        return self.process(**kwargs)[0]
+        return self._process(**kwargs)[0]
 
     def get_gate_name(self):
         return self.__class__.__name__
 
-    def add_preprocessing_hook(self, f):
-        self.preprocessing_hooks.append(f)
+    def add_preprocessing_hook(self, key, f):
+        self.preprocessing_hooks[key] = f
     
-    def add_postprocessing_hook(self, f):
-        self.postprocessing_hooks.append(f)
+    def add_postprocessing_hook(self, key, f):
+        self.postprocessing_hooks[key] = f
     
     def __getitem__(self, key):
         self.initialize()
         index_items = key.split('-')
         if len(index_items) <= 1:
+            if self.get_gate_name() == key:
+                return self
             raise Exception('Internal component access error with key: ' + key)
 
         try:
