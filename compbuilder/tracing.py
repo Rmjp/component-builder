@@ -1,6 +1,6 @@
 from . import Component, Signal, Wire, WireFactory
 
-from myhdlpeek_wavedrom import wavejson_to_wavedrom
+from .myhdlpeek_wavedrom import wavejson_to_wavedrom
 
 def assign_internal_component_names(component, suffix='', level=1):
     if not component.internal_components:
