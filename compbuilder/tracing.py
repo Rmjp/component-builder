@@ -1,5 +1,7 @@
 from . import Component, Signal, Wire, WireFactory
 
+from myhdlpeek_wavedrom import wavejson_to_wavedrom
+
 def assign_internal_component_names(component, suffix='', level=1):
     if not component.internal_components:
         return
@@ -92,4 +94,34 @@ def trace(component, input_signals, probes, step=None, level=None):
             output[probe] = outs[probe]
 
     return output
-    
+
+def wavejsonify_inout(inputs, outputs):
+    """Constructs a WaveJSON to be used by WaveDrom.  In addition, consecutive
+    bit symbols 0 and 1 are converted into '.' to remove spikes in the
+    visualization."""
+
+    def make_entry(name,signal):
+        if isinstance(signal,str): # 1-bit signal
+            # suppress duplicate consecutive bits
+            result = []
+            prev = None
+            for x in signal:
+                result.append(x if x != prev else '.')
+                prev = x
+            return {'name':name, 'wave':''.join(result)}
+        else: # bus signal
+            return {'name':name,
+                    'wave':'='*len(signal),
+                    'data':[f'0x{s:X}' for s in signal]}
+
+    in_waves = [make_entry(k,v) for k,v in inputs.items()]
+    out_waves = [make_entry(k,v) for k,v in outputs.items()]
+
+    return {'signal': [
+               ['Input', *in_waves],
+               {},
+               ['Output', *out_waves],
+           ]}
+
+def plot_trace_inout(inputs, outputs):
+    wavejson_to_wavedrom(wavejsonify_inout(inputs, outputs))
