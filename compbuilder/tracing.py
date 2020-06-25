@@ -73,18 +73,23 @@ def trace(component, input_signals, probes, step=None, level=None):
     if input_signals == {}:
         input_signals = {'dummysignalorhfiusgrewrgltewr':'0' * step}
             
-    outs = []
-    out_names = [x.name for x in component.OUT]
+    outs = {probe:[] for probe in probes}
     for bits in zip(*input_signals.values()):
         ins = {name:Signal(int(signal),component_wire_map[name].width)
                for name,signal in zip(input_signals.keys(),bits)}
         out_signals = component.eval(**ins)
 
         res = {}
-        for name in trace_wire_map:
-            res[name] = trace_wire_map[name][0].trace_signals[trace_wire_map[name][1].name]
-        outs.append(res)
+        for name in outs:
+            outs[name].append(trace_wire_map[name][0].trace_signals[trace_wire_map[name][1].name])
 
-        
-    print(outs)
+    output = {}
+    for probe in probes:
+        wire = trace_wire_map[probe][1]
+        if wire.width == 1:
+            output[probe] = ''.join([str(s.value) for s in outs[probe]])
+        else:
+            output[probe] = outs[probe]
+
+    return output
     
