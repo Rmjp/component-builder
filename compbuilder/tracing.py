@@ -1,5 +1,7 @@
 from . import Component, Signal, Wire, WireFactory
 
+from .myhdlpeek_wavedrom import wavejson_to_wavedrom
+
 def assign_internal_component_names(component, suffix='', level=1):
     if not component.internal_components:
         return
@@ -15,7 +17,7 @@ def assign_internal_component_names(component, suffix='', level=1):
                                             this_suffix,
                                             level-1)
 
-def extract_parts(component, level=1):
+def extract_parts_with_depth(component, level=1):
 
     def recurse(component, depth, level, output):
         output.append((depth, component))
@@ -28,14 +30,98 @@ def extract_parts(component, level=1):
     parts = []
     recurse(component, 0, level+1, parts)
     return parts
-    
-            
-def report_parts(component, level=1):
+
+def init_component_part_names(component, level=1):
     component.initialize()
     assign_internal_component_names(component, level=level)
     component.component_name = component.get_gate_name()
-
-    parts = extract_parts(component, level)
+            
+def report_parts(component, level=1):
+    init_component_part_names(component, level)
+    parts = extract_parts_with_depth(component, level)
     return '\n'.join(['{}{}'.format('  ' * d,
                                     c.component_name) for (d,c) in parts])
+
+def trace(component, input_signals, probes, step=None, level=None):
+    def check_steps(input_signals, step):
+        if input_signals == {}:
+            if step == None:
+                raise Exception("No simulation steps given")
+        
+        signal_lengths = [len(x) for x in input_signals.values()]
+        if min(signal_lengths) != max(signal_lengths):
+            raise Exception("Input signals must have identical length")
+
+        if (step != None) and signal_lengths != step:
+            raise Exception("Simulation steps mismatch")
+
+    check_steps(input_signals, step)
+        
+    component.initialize()
+    component_wire_map = {w.name:w
+                          for w in component.IN + component.OUT}
+
+    if level == None:  # only top level trace
+        trace_wire_map = {name:(component,component_wire_map[name])
+                          for name in component_wire_map}
+    else:
+        init_component_part_names(component, level)
+        trace_wire_map = {}
+
+        for d,c in extract_parts_with_depth(component, level):
+            trace_wire_map.update({(c.component_name + ':' + w.name):(c,w)
+                                   for w in c.IN + c.OUT})
+
+    if input_signals == {}:
+        input_signals = {'dummysignalorhfiusgrewrgltewr':'0' * step}
             
+    outs = {probe:[] for probe in probes}
+    for bits in zip(*input_signals.values()):
+        ins = {name:Signal(int(signal),component_wire_map[name].width)
+               for name,signal in zip(input_signals.keys(),bits)}
+        out_signals = component.eval(**ins)
+
+        res = {}
+        for name in outs:
+            outs[name].append(trace_wire_map[name][0].trace_signals[trace_wire_map[name][1].name])
+
+    output = {}
+    for probe in probes:
+        wire = trace_wire_map[probe][1]
+        if wire.width == 1:
+            output[probe] = ''.join([str(s.value) for s in outs[probe]])
+        else:
+            output[probe] = outs[probe]
+
+    return output
+
+def wavejsonify_inout(inputs, outputs):
+    """Constructs a WaveJSON to be used by WaveDrom.  In addition, consecutive
+    bit symbols 0 and 1 are converted into '.' to remove spikes in the
+    visualization."""
+
+    def make_entry(name,signal):
+        if isinstance(signal,str): # 1-bit signal
+            # suppress duplicate consecutive bits
+            result = []
+            prev = None
+            for x in signal:
+                result.append(x if x != prev else '.')
+                prev = x
+            return {'name':name, 'wave':''.join(result)}
+        else: # bus signal
+            return {'name':name,
+                    'wave':'='*len(signal),
+                    'data':[f'0x{s:X}' for s in signal]}
+
+    in_waves = [make_entry(k,v) for k,v in inputs.items()]
+    out_waves = [make_entry(k,v) for k,v in outputs.items()]
+
+    return {'signal': [
+               ['Input', *in_waves],
+               {},
+               ['Output', *out_waves],
+           ]}
+
+def plot_trace_inout(inputs, outputs):
+    wavejson_to_wavedrom(wavejsonify_inout(inputs, outputs))

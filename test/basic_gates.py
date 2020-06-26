@@ -10,9 +10,9 @@ class Nand(Component):
 
     def process(self, a, b):
         if (a.get()==1) and (b.get()==1):
-            return [Signal(0)]
+            return {'out': Signal(0)}
         else:
-            return [Signal(1)]
+            return {'out': Signal(1)}
 
 class Not(Component):
     IN = [w.a]

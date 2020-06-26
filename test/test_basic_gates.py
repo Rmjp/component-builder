@@ -73,21 +73,21 @@ class TestAdder(unittest.TestCase):
         self.full_adder = FullAdder()
 
     def test_half_adder(self):
-        self.assertEqual(self.half_adder.eval(a=F, b=F), [F,F])
-        self.assertEqual(self.half_adder.eval(a=F, b=T), [T,F])
-        self.assertEqual(self.half_adder.eval(a=T, b=F), [T,F])
-        self.assertEqual(self.half_adder.eval(a=T, b=T), [F,T])
+        self.assertEqual(self.half_adder.eval(a=F, b=F), {'s':F, 'carry':F})
+        self.assertEqual(self.half_adder.eval(a=F, b=T), {'s':T, 'carry':F})
+        self.assertEqual(self.half_adder.eval(a=T, b=F), {'s':T, 'carry':F})
+        self.assertEqual(self.half_adder.eval(a=T, b=T), {'s':F, 'carry':T})
 
     def test_full_adder(self):
-        self.assertEqual(self.full_adder.eval(a=F, b=F, carry_in=F), [F,F])
-        self.assertEqual(self.full_adder.eval(a=F, b=T, carry_in=F), [T,F])
-        self.assertEqual(self.full_adder.eval(a=T, b=F, carry_in=F), [T,F])
-        self.assertEqual(self.full_adder.eval(a=T, b=T, carry_in=F), [F,T])
+        self.assertEqual(self.full_adder.eval(a=F, b=F, carry_in=F), {'s':F, 'carry_out':F})
+        self.assertEqual(self.full_adder.eval(a=F, b=T, carry_in=F), {'s':T, 'carry_out':F})
+        self.assertEqual(self.full_adder.eval(a=T, b=F, carry_in=F), {'s':T, 'carry_out':F})
+        self.assertEqual(self.full_adder.eval(a=T, b=T, carry_in=F), {'s':F, 'carry_out':T})
 
-        self.assertEqual(self.full_adder.eval(a=F, b=F, carry_in=T), [T,F])
-        self.assertEqual(self.full_adder.eval(a=F, b=T, carry_in=T), [F,T])
-        self.assertEqual(self.full_adder.eval(a=T, b=F, carry_in=T), [F,T])
-        self.assertEqual(self.full_adder.eval(a=T, b=T, carry_in=T), [T,T])
+        self.assertEqual(self.full_adder.eval(a=F, b=F, carry_in=T), {'s':T, 'carry_out':F})
+        self.assertEqual(self.full_adder.eval(a=F, b=T, carry_in=T), {'s':F, 'carry_out':T})
+        self.assertEqual(self.full_adder.eval(a=T, b=F, carry_in=T), {'s':F, 'carry_out':T})
+        self.assertEqual(self.full_adder.eval(a=T, b=T, carry_in=T), {'s':T, 'carry_out':T})
 
         
 if __name__ == '__main__':

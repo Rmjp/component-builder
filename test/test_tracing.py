@@ -6,7 +6,7 @@ from test.basic_gates import Nand, Not, And, Or, Xor, HalfAdder, FullAdder
 T = Signal.T
 F = Signal.F
 
-from compbuilder.tracing import report_parts
+from compbuilder.tracing import report_parts, trace
 
 class TestReportParts(unittest.TestCase):
     def setUp(self):
@@ -127,6 +127,46 @@ class TestInternalComponents(unittest.TestCase):
                          self.xor_gate.internal_components[4]
                          .internal_components[1]
                          .internal_components[0])
+
+class TestTracing(unittest.TestCase):
+    def setUp(self):
+        self.not_gate = Not()
+        self.and_gate = And()
+        self.xor_gate = Xor()
+
+    def test_not_trace(self):
+        self.assertEqual(trace(self.not_gate, {'a':'0011',}, ['out']),
+                         {'out':'1100'})
+
+    def test_and_trace(self):
+        self.assertEqual(trace(self.and_gate, {'a':'0011', 'b':'0101',}, ['out']),
+                         {'out':'0001'})
+
+    def test_and_trace_level2(self):
+        self.assertEqual(trace(self.and_gate,
+                               {'a':'0011', 'b':'0101',},
+                               ['And:out', 'Nand-1:out', 'Not-2:a', 'Not-2:out', 'Nand-2-1:a'],
+                               level=2),
+                         {'And:out':'0001',
+                          'Nand-1:out':'1110',
+                          'Not-2:a':'1110',
+                          'Not-2:out':'0001',
+                          'Nand-2-1:a':'1110'})
+
+    def test_xor_trace(self):
+        self.assertEqual(trace(self.xor_gate, {'a':'0011', 'b':'0101'}, ['out']),
+                         {'out':'0110'})
+
+    def test_xor_trace_level2(self):
+        self.assertEqual(trace(self.xor_gate,
+                               {'a':'0011', 'b':'0101'},
+                               ['Xor:out', 'Or-5:a', 'Or-5:b', 'Not-5-1:a', 'Not-5-1:out'],
+                               level=2),
+                         {'Xor:out': '0110',
+                          'Or-5:a': '0010',
+                          'Or-5:b': '0100',
+                          'Not-5-1:a': '0010',
+                          'Not-5-1:out': '1101'})
 
 
 if __name__ == '__main__':
