@@ -47,6 +47,25 @@ class Not(VisualMixin,Component):
         Nand(a=w.a, b=w.a, out=w.out),
     ]
 
+    LAYOUT_CONFIG = {
+        'width' : 50,
+        'height' : 50,
+        'port_width' : 0,
+        'port_height' : 0,
+        'label' : '',
+        'ports' : {  # hide all port labels
+            'a' : {'label' : ''},
+            'out' : {'label' : ''},
+        },
+        'svg' : """
+            <path d="M 0,0
+                     l 40,25
+                     l -40,25
+                     z" />
+            <circle cx="45" cy="25" r="5"/>
+        """,
+    }
+
 
 class And(VisualMixin,Component):
     IN = [w.a, w.b]
