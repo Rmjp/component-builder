@@ -145,3 +145,18 @@ def trace_and_plot_inout(component, input_signals, probes=None, step=None, level
     plot_trace_inout(input_signals, output_signals)
 
 
+def trace_and_plot(component, input_signals, signal_label_groups, step=None, level=None):
+    probes = []
+    for names in signal_label_groups.values():
+        probes += names
+
+    out_signals = trace(component, input_signals, probes, step, level)
+
+    signal_groups = {}
+    for label in signal_label_groups:
+        signal_groups[label] = {name:out_signals[name] 
+                                for name in signal_label_groups[label]}
+            
+    plot_trace(signal_groups)
+
+
