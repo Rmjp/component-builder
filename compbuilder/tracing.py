@@ -95,33 +95,53 @@ def trace(component, input_signals, probes, step=None, level=None):
 
     return output
 
-def wavejsonify_inout(inputs, outputs):
+def make_wavejson_entry(name,signal):
+    if isinstance(signal,str): # 1-bit signal
+        # suppress duplicate consecutive bits
+        result = []
+        prev = None
+        for x in signal:
+            result.append(x if x != prev else '.')
+            prev = x
+        return {'name':name, 'wave':''.join(result)}
+    else: # bus signal
+        return {'name':name,
+                'wave':'='*len(signal),
+                'data':[f'0x{s:X}' for s in signal]}
+
+def wavejsonify(signal_groups):
     """Constructs a WaveJSON to be used by WaveDrom.  In addition, consecutive
     bit symbols 0 and 1 are converted into '.' to remove spikes in the
     visualization."""
 
-    def make_entry(name,signal):
-        if isinstance(signal,str): # 1-bit signal
-            # suppress duplicate consecutive bits
-            result = []
-            prev = None
-            for x in signal:
-                result.append(x if x != prev else '.')
-                prev = x
-            return {'name':name, 'wave':''.join(result)}
-        else: # bus signal
-            return {'name':name,
-                    'wave':'='*len(signal),
-                    'data':[f'0x{s:X}' for s in signal]}
+    all_signals = []
+    for label in signal_groups:
+        signals = signal_groups[label]
+        waves = [make_wavejson_entry(k,v) for k,v in signals.items()]
+        all_signals.append([label, *waves])
+        all_signals.append({})
 
-    in_waves = [make_entry(k,v) for k,v in inputs.items()]
-    out_waves = [make_entry(k,v) for k,v in outputs.items()]
+    del all_signals[-1]
+    
+    return {'signal': all_signals}
 
-    return {'signal': [
-               ['Input', *in_waves],
-               {},
-               ['Output', *out_waves],
-           ]}
+def wavejsonify_inout(inputs, outputs):
+    return wavejsonify({'Input':inputs,
+                        'Output':outputs})
+
 
 def plot_trace_inout(inputs, outputs):
     wavejson_to_wavedrom(wavejsonify_inout(inputs, outputs))
+
+def plot_trace(signal_groups):
+    wavejson_to_wavedrom(wavejsonify(signal_groups))
+
+
+def trace_and_plot_inout(component, input_signals, probes=None, step=None, level=None):
+    if not probes:
+        probes = [w.name for w in component.OUT]
+
+    output_signals = trace(component, input_signals, probes, step, level)
+    plot_trace_inout(input_signals, output_signals)
+
+
