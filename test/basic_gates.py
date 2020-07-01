@@ -14,6 +14,25 @@ class Nand(Component):
         else:
             return {'out': Signal(1)}
 
+class _DFF(Component):
+    IN = [w.d]
+    OUT = [w.q]
+
+    PARTS = []
+
+    def __init__(self, **kwargs):
+        super(_DFF, self).__init__(**kwargs)
+        self.is_clocked_component = True
+    
+    def process(self, d):
+        return {'q': Signal(d.get())}
+
+class DFF(Component):
+    IN = [w.d]
+    OUT = [w.q]
+
+    PARTS = [_DFF(d=w.d, q=w.q)]
+
 class Not(Component):
     IN = [w.a]
     OUT = [w.out]

@@ -99,6 +99,9 @@ class Component:
         self.preprocessing_hooks = {}
         self.postprocessing_hooks = {}
 
+        self.is_clocked_component = False
+        self.clocked_components = []
+
     def shallow_clone(self):
         return type(self)(**self.wire_assignments)
 
@@ -127,10 +130,12 @@ class Component:
                 self.nodes[vid].current_indegree -= 1
                     
         src_list = []
+        added_set = set()
         for uid in self.nodes:
             u = self.nodes[uid]
-            if u.current_indegree == 0:
+            if (u.current_indegree == 0) or (u.component.is_clocked_component):
                 src_list.append(u)
+                added_set.add(u.id)
 
         ncount = 0
         while len(src_list)!=0:
@@ -144,11 +149,43 @@ class Component:
                     v = self.nodes[vid]
                     v.current_indegree -= 1
                     if v.current_indegree == 0:
-                        src_list.append(v)
+                        if v.id not in added_set:
+                            src_list.append(v)
+                            added_set.add(v.id)
 
         if ncount != self.n:
             raise Exception('Loop in component parts found')
+
+        self.topo_ordering = [u for u in self.topo_ordering if not u.component.is_clocked_component]
+        
+        for uid in self.nodes:
+            u = self.nodes[uid]
+            if u.component.is_clocked_component:
+                self.topo_ordering.append(u)
+
     
+    def add_wire_to_node_in_edge(self, node, wire, component):
+        key = wire.get_key()
+        actual_wire = component.get_actual_edge(wire.name)
+        actual_key = actual_wire.get_key()
+        node.in_dict[key] = actual_key
+        node.in_wires[key] = actual_wire
+
+        e = self.get_or_create_edge(actual_key)
+        e['dest'].append(node.id)
+        node.in_list.append(e)
+                
+    def add_wire_to_node_out_edge(self, node, wire, component):
+        key = wire.get_key()
+        actual_wire = component.get_actual_edge(wire.name)
+        actual_key = actual_wire.get_key()
+        node.out_dict[key] = actual_key
+        node.out_wires[key] = actual_wire
+                
+        e = self.get_or_create_edge(actual_key)
+        e['src'].append(node.id)
+        node.out_list.append(e)
+
     def build_graph(self):
         if not getattr(self, 'PARTS', None):
             self.PARTS = []
@@ -166,34 +203,22 @@ class Component:
             p.validate_config()
             component = p.shallow_clone()
             component.initialize()
+            if component.is_clocked_component:
+                self.is_clocked_component = True
+                self.clocked_components.append(component)
             
             self.internal_components.append(component)
 
             node = self.Node(nid, component)
+            component.node = node
 
             self.nodes[nid] = node
 
             for wire in component.IN:
-                key = wire.get_key()
-                actual_wire = component.get_actual_edge(wire.name)
-                actual_key = actual_wire.get_key()
-                node.in_dict[key] = actual_key
-                node.in_wires[key] = actual_wire
-
-                e = self.get_or_create_edge(actual_key)
-                e['dest'].append(nid)
-                node.in_list.append(e)
+                self.add_wire_to_node_in_edge(node, wire, component)
                 
             for wire in component.OUT:
-                key = wire.get_key()
-                actual_wire = component.get_actual_edge(wire.name)
-                actual_key = actual_wire.get_key()
-                node.out_dict[key] = actual_key
-                node.out_wires[key] = actual_wire
-                
-                e = self.get_or_create_edge(actual_key)
-                e['src'].append(nid)
-                node.out_list.append(e)
+                self.add_wire_to_node_out_edge(node, wire, component)
 
         for estr in self.edges:
             e = self.edges[estr]
@@ -217,6 +242,18 @@ class Component:
             'edges': self.edges,
         }
 
+        """
+        print()
+        print('--- graph ---', self)
+        print(self, 'NODES:', self.nodes)
+        for uid in self.nodes:
+            u = self.nodes[uid]
+            print(' - ', uid, u.component)
+            print('   ', u.in_dict, u.in_wires)
+        print(self, 'EDGES:', self.edges)
+        print()
+        """
+        
     def get_actual_edge(self, estr):
         return self.wire_assignments[estr]
         
@@ -233,33 +270,58 @@ class Component:
         self.build_graph()
         
         self.is_initialized = True
+
+    def propagate_output(self, u, output):
+        for k in u.component.OUT:
+            v = output[k.name]
+            estr = k.get_key()
+            wire = u.out_wires[estr]
+            self.edges[u.out_dict[estr]]['value'] = wire.save_to_signal(self.edges[u.out_dict[estr]]['value'],v)
+
+    def propagate_clocked_component_outputs(self):
+        for uid in self.nodes:
+            u = self.nodes[uid]
+            if u.component.is_clocked_component:
+                if getattr(u.component,'saved_output',None) == None:
+                    u.component.saved_output = {}
+                    for k in u.component.OUT:
+                        v = u.component.saved_output[k.name] = Signal(0)
+
+                self.propagate_output(u, u.component.saved_output)
             
     def process(self, **kwargs):
         self.initialize()
 
+        if len(self.clocked_components) != 0:
+            #print('propagating')
+            self.propagate_clocked_component_outputs()
+        
         for wire in self.IN:
             key = wire.get_key()
             self.edges[key]['value'] = kwargs[wire.name]
 
-        input_kwargs = {}
         for u in self.topo_ordering:
+            input_kwargs = {}
             for k in u.in_dict:
                 wire = u.in_wires[k]
                 input_kwargs[k[0]] = wire.slice_signal(self.edges[u.in_dict[k]]['value'])
+
+            #print("IN:", u.component, u.in_dict, input_kwargs)
             output = u.component.eval(**input_kwargs)
 
-            for k in u.component.OUT:
-                v = output[k.name]
-                estr = k.get_key()
-                wire = u.out_wires[estr]
-                self.edges[u.out_dict[estr]]['value'] = wire.save_to_signal(self.edges[u.out_dict[estr]]['value'],v)
-
+            if u.component.is_clocked_component:
+                u.component.saved_output = output
+                #print('Saved:', u.component.get_gate_name(), output)
+            else:
+                self.propagate_output(u, output)
+            
         return {wire.name:self.edges[wire.get_key()]['value'] for wire in self.OUT}
 
     def _process(self, **kwargs):
         for f in self.preprocessing_hooks.values():
             f(self, kwargs)
 
+        #print(">>", self, kwargs)
         output = self.process(**kwargs)
 
         for f in self.postprocessing_hooks.values():
