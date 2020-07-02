@@ -2,6 +2,8 @@ from compbuilder import Component, Signal
 
 from compbuilder import w
 
+# Two primitive gates - Nand and DFF
+
 class Nand(Component):
     IN = [w.a, w.b]
     OUT = [w.out]
@@ -34,6 +36,7 @@ class DFF(Component):
     def process(self, d):
         self.saved_input_kwargs = {'d': d}
         return self.saved_ouput
+
 
 class Not(Component):
     IN = [w.a]
@@ -101,9 +104,3 @@ class FullAdder(Component):
            out=w.carry_out),
     ]
 
-class And2(Component):
-    IN = [w(2).a, w(2).b]
-    OUT = [w(2).out]
-
-    PARTS = [
-    ]
