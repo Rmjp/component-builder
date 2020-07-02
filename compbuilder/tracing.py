@@ -83,7 +83,8 @@ def trace(component, input_signals, probes, step=None, level=None):
 
         res = {}
         for name in outs:
-            outs[name].append(trace_wire_map[name][0].trace_signals[trace_wire_map[name][1].name])
+            out_signal = trace_wire_map[name][0].trace_signals[trace_wire_map[name][1].name]
+            outs[name].append(Signal(out_signal.value, out_signal.width))
 
     output = {}
     for probe in probes:
