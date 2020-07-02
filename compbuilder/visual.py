@@ -15,7 +15,7 @@ DEFAULT_LAYOUT_CONFIG = {
 
 COMPONENT_JS = """
 ///////////////////////////////////////////////////
-Component = function(config) {
+var Component = function(config) {
   this.config = config;
   this.wires = {};
   this.initialize();
@@ -141,7 +141,7 @@ PRIMITIVE_GATE_JS_TEMPLATE = dedent('''
 PART_JS_TEMPLATE = ' '*4 + '{{ id: {id}, config: GATES.{name}, wiring: {{{wiring}}} }},'
 PROCESS_JS_TEMPLATE = ' '*4 + '"{pin}" : function(w) {{ {statement} }},'
 NEW_COMPONENT_JS_TEMPLATE = dedent('''
-  component = new Component(GATES.{name});
+  var component = new Component(GATES.{name});
   component.process({{{inputs}}});
 ''')
 
@@ -446,7 +446,7 @@ class VisualMixin:
     ################
     def generate_js(self,indent=None,depth=0,**kwargs):
         gates = self._resolve_dependencies()
-        lines = [COMPONENT_JS, 'GATES = {}']
+        lines = [COMPONENT_JS, 'var GATES = {}']
         for g in gates:
             lines.append(g()._generate_gate_config_js())
         lines.append(NEW_COMPONENT_JS_TEMPLATE.format(
@@ -454,11 +454,12 @@ class VisualMixin:
             inputs=','.join(f"{w.name}:0" for w in self.IN),
         ))
         elk = self.generate_elk(depth,**kwargs)
-        lines.append('graph = {}'.format(
+        lines.append('var graph = {}'.format(
             json.dumps(elk,indent=indent)))
 
         # create mapping from ELK's node id to corresponding component
-        lines.append('\nnode_map = {}')
+        lines.append('')
+        lines.append('var node_map = {}')
         node_map = {}
         self._generate_node_map(elk['children'][0],node_map,'component')
         # create the mapping for the root component manually
@@ -468,6 +469,7 @@ class VisualMixin:
         for k,v in node_map.items():
             lines.append(f'node_map.{k} = {v}')
 
-        lines.append("\nconfig = {component: component, graph: graph, node_map: node_map};");
+        lines.append('')
+        lines.append('var config = {component: component, graph: graph, node_map: node_map};');
 
         return '\n'.join(lines)

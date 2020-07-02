@@ -30,7 +30,7 @@ path.edge {
 }
 
 path.edge.active {
-  stroke-width: 2px;
+  stroke-width: 3px;
   stroke: green;
 }
 
