@@ -45,6 +45,12 @@ class Signal:
     def __repr__(self):
         return str(self)
 
+    def __format__(self, format_spec):
+        if format_spec[-1] != 'X':
+            return self.value.__format__(format_spec)
+        else:
+            return '{:X}'.format(self.value)
+    
     @staticmethod
     def from_string(s):
         return Signal(int(s,2), len(s))
