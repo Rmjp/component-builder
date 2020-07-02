@@ -83,6 +83,7 @@ class Component:
             self.out_list = []
             self.indegree = 0
             self.outdegree = 0
+            self.is_deferred = False
 
     def init_parts(self):
         pass
@@ -101,6 +102,8 @@ class Component:
 
         self.is_clocked_component = False
         self.clocked_components = []
+        self.saved_input_kwargs = None
+        
 
     def shallow_clone(self):
         return type(self)(**self.wire_assignments)
@@ -161,6 +164,7 @@ class Component:
         for uid in self.nodes:
             u = self.nodes[uid]
             if u.component.is_clocked_component:
+                u.is_deferred = True
                 self.topo_ordering.append(u)
 
     
@@ -278,24 +282,10 @@ class Component:
             wire = u.out_wires[estr]
             self.edges[u.out_dict[estr]]['value'] = wire.save_to_signal(self.edges[u.out_dict[estr]]['value'],v)
 
-    def propagate_clocked_component_outputs(self):
-        for uid in self.nodes:
-            u = self.nodes[uid]
-            if u.component.is_clocked_component:
-                if getattr(u.component,'saved_output',None) == None:
-                    u.component.saved_output = {}
-                    for k in u.component.OUT:
-                        v = u.component.saved_output[k.name] = Signal(0)
-
-                self.propagate_output(u, u.component.saved_output)
-            
+    
     def process(self, **kwargs):
         self.initialize()
 
-        if len(self.clocked_components) != 0:
-            #print('propagating')
-            self.propagate_clocked_component_outputs()
-        
         for wire in self.IN:
             key = wire.get_key()
             self.edges[key]['value'] = kwargs[wire.name]
@@ -307,16 +297,35 @@ class Component:
                 input_kwargs[k[0]] = wire.slice_signal(self.edges[u.in_dict[k]]['value'])
 
             #print("IN:", u.component, u.in_dict, input_kwargs)
-            output = u.component.eval(**input_kwargs)
-
-            if u.component.is_clocked_component:
-                u.component.saved_output = output
-                #print('Saved:', u.component.get_gate_name(), output)
-            else:
+            if not u.is_deferred:
+                output = u.component._process(**input_kwargs)
                 self.propagate_output(u, output)
+            else:
+                u.component.saved_input_kwargs = input_kwargs
             
         return {wire.name:self.edges[wire.get_key()]['value'] for wire in self.OUT}
 
+    def process_deffered(self):
+        self.initialize()
+
+        if not self.is_clocked_component:
+            return {}
+        
+        kwargs = self.saved_input_kwargs
+        
+        for wire in self.IN:
+            key = wire.get_key()
+            if kwargs != None:
+                self.edges[key]['value'] = kwargs[wire.name]
+
+        node_ordering = [u for u in self.topo_ordering if u.is_deferred == True]
+
+        for u in node_ordering:
+            output = u.component._process_deffered()
+            self.propagate_output(u, output)
+
+        return {wire.name:self.edges[wire.get_key()]['value'] for wire in self.OUT}
+    
     def _process(self, **kwargs):
         for f in self.preprocessing_hooks.values():
             f(self, kwargs)
@@ -333,11 +342,32 @@ class Component:
             
         return output
     
+    def _process_deffered(self):
+        kwargs = self.saved_input_kwargs
+        if kwargs == None:
+            kwargs = {}
+        for f in self.preprocessing_hooks.values():
+            f(self, kwargs)
+
+        #print(">>", self, kwargs)
+        output = self.process_deffered()
+
+        for f in self.postprocessing_hooks.values():
+            f(self, kwargs, output)
+
+        self.trace_input_signals = kwargs
+        self.trace_output_signals = output
+        self.trace_signals = {**kwargs, **self.trace_output_signals}
+            
+        return output
+    
     def eval(self, **kwargs):
+        #if self.is_clocked_component:
+        self._process_deffered()
         return self._process(**kwargs)
     
     def eval_single(self, **kwargs):
-        output = self._process(**kwargs)
+        output = self.eval(**kwargs)
         if len(output.keys()) != 1:
             raise Exception("eval single works only with output with exactly one wire")
         return list(output.values())[0]
