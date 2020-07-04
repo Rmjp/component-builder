@@ -8,7 +8,7 @@ rect.port {
   fill: grey;
 }
 
-rect.port.active {
+rect.port.T {
   fill: lightgreen;
 }
 
@@ -16,7 +16,7 @@ path.connector {
   fill: white;
 }
 
-path.connector.active {
+path.connector.T {
   fill: lightgreen;
 }
 
@@ -29,7 +29,7 @@ path.edge {
   stroke: #888888;
 }
 
-path.edge.active {
+path.edge.T {
   stroke-width: 3px;
   stroke: green;
 }

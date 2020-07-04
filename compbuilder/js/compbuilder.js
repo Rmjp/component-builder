@@ -172,15 +172,15 @@ function drawNode(svg,node) {
 //////////////////////////////////
 function update(svg,node_map) {
   svg.selectAll("path.edge")
-    .classed("active", function(e) {
+    .classed("T", function(e) {
       return node_map[e.node_id].wires[e.wire];
     });
   svg.selectAll("rect.port")
-    .classed("active", function(p) {
+    .classed("T", function(p) {
       return node_map[p.node_id].wires[p.wire];
     });
   svg.selectAll("path.connector")
-    .classed("active", function(c) {
+    .classed("T", function(c) {
       return node_map[c.node_id].wires[c.wire];
     });
 }
