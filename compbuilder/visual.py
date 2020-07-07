@@ -181,7 +181,7 @@ class VisualMixin:
         }]
 
     ################
-    def _create_port(self,name,port_id,index,type):
+    def _create_port(self,wire,port_id,index,type):
         side = {'in': 'WEST','out':'EAST'}[type]
         port = {
             'id': f'P{port_id}',
@@ -193,9 +193,12 @@ class VisualMixin:
             'height': self.config['port_height'],
         }
         try:  # use configured port label if available
-            label = self.config['ports'][name]['label']
+            label = self.config['ports'][wire.name]['label']
         except KeyError:
-            label = name
+            label = wire.name
+
+        if wire.width > 1:
+            label += f'[{wire.width-1}:{0}]'
 
         if label:
             port['labels'] = [{
@@ -243,7 +246,9 @@ class VisualMixin:
             self.initialize()
 
         self.config = deepcopy(DEFAULT_LAYOUT_CONFIG)
-        if hasattr(self,"LAYOUT_CONFIG"):
+        # override with component's layout configuration (if exists) when it
+        # is a primitive component or it is shown without internal components
+        if (not self.PARTS or depth == 0) and hasattr(self,"LAYOUT_CONFIG"):
             self.config.update(self.LAYOUT_CONFIG)
 
         # port_map maintain mapping of (node-id,wire) -> (ELK port-id)
@@ -255,7 +260,7 @@ class VisualMixin:
                 port_max = max(len(self.IN),len(self.OUT))
                 self.config['height'] = port_max * self.config['port_spacing']
             if 'label' not in self.config:
-                self.config['label'] = self.get_gate_name()
+                self.config['label'] = self.get_gate_name() + base_id.replace('_','-')
             box = self._create_body(base_id)
         else:
             children = []
@@ -265,7 +270,7 @@ class VisualMixin:
                 subcomp['node_id'] = node.id
                 children.append(subcomp)
             # use original label when internal components are shown
-            self.config['label'] = self.get_gate_name()
+            self.config['label'] = self.get_gate_name() + base_id.replace('_','-')
             box = {
                 'id' : f'N{base_id}',
                 'children' : children,
@@ -283,15 +288,15 @@ class VisualMixin:
         # also maintain port_map to be exposed to the outer component
         port_map = {}
         elk_ports = []
-        ports = [(p,'in') for p in self.IN[::-1]]
-        ports += [(p,'out') for p in self.OUT]
-        for i,(port,type) in enumerate(ports):
+        ports = [(w,'in') for w in self.IN[::-1]]
+        ports += [(w,'out') for w in self.OUT]
+        for i,(wire,type) in enumerate(ports):
             port_id = f'{base_id}_{i}'
-            elk_port = self._create_port(port.name,port_id,i,type)
+            elk_port = self._create_port(wire,port_id,i,type)
             # attach wire's name to help styling
-            elk_port['wire'] = port.name
+            elk_port['wire'] = wire.name
             elk_ports.append(elk_port)
-            port_map[port.get_key()] = elk_port['id']
+            port_map[wire.get_key()] = elk_port['id']
         box['ports'] = elk_ports
 
         # when internal components are shown, also add edges to represent
