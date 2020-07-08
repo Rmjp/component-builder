@@ -126,6 +126,36 @@ class Component:
             self.edges[estr] = e
         return e
 
+    def normalize_component_wire_widths(self):
+        def normalize_wire_width(wire, widths):
+            if wire.name in widths:
+                return Wire(wire.name, widths[wire.name], wire.slice)
+            else:
+                return wire
+        
+        widths = {}
+        all_wires = self.IN + self.OUT
+        for component in self.PARTS:
+            for wire in component.IN + component.OUT:
+                key = wire.get_key()
+                actual_wire = component.get_actual_edge(wire.name)
+                all_wires.append(actual_wire)
+            
+        for w in all_wires:
+            if (w.name not in widths) or (widths[w.name] == 1):
+                widths[w.name] = w.width
+            elif (w.width != 1) and (widths[w.name] != w.width):
+                raise Exception('Wire width mismatch {} and {}'.format(widths[w.name],w.width))
+
+        self.IN = [normalize_wire_width(w, widths) for w in self.IN]
+        self.OUT = [normalize_wire_width(w, widths) for w in self.OUT]
+        for component in self.PARTS:
+            for wire in component.IN + component.OUT:
+                actual_wire = component.get_actual_edge(wire.name)
+                component.set_actual_edge(wire.name, normalize_wire_width(actual_wire, widths))
+                new_actual_wire = component.get_actual_edge(wire.name)
+
+                
     def top_sort(self):
         self.topo_ordering = []
 
@@ -266,6 +296,9 @@ class Component:
         
     def get_actual_edge(self, estr):
         return self.wire_assignments[estr]
+
+    def set_actual_edge(self, estr, wire):
+        self.wire_assignments[estr] = wire    
         
     def validate_config(self):
         for wire in self.IN + self.OUT:
@@ -277,6 +310,7 @@ class Component:
         if self.is_initialized:
             return
 
+        self.normalize_component_wire_widths()
         self.build_graph()
         
         self.is_initialized = True
@@ -416,6 +450,9 @@ class Wire:
         self.width = width
         self.slice = slice
         
+    def __str__(self):
+        return '{}:{}'.format(self.name, self.width)
+
     def get_key(self):
         return (self.name, self.width)
 

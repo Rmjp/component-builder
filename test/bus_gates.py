@@ -8,10 +8,10 @@ class And2(Component):
     OUT = [w(2).out]
 
     PARTS = [
-        And(a=w(2).a[0], b=w(2).b[0],
-             out=w(2).out[0]),
-        And(a=w(2).a[1], b=w(2).b[1],
-             out=w(2).out[1]),
+        And(a=w.a[0], b=w.b[0],
+             out=w.out[0]),
+        And(a=w.a[1], b=w.b[1],
+             out=w.out[1]),
     ]
 
 class And8(Component):
@@ -26,6 +26,6 @@ class And8(Component):
 
         And8.PARTS = []
         for i in range(8):
-            And8.PARTS.append(And(a=w(8).a[i], b=w(8).b[i],
-                                  out=w(8).out[i]))
+            And8.PARTS.append(And(a=w.a[i], b=w.b[i],
+                                  out=w.out[i]))
 
