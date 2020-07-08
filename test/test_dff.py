@@ -104,9 +104,6 @@ class AutoCounter(Component):
     OUT = [w(4).out]
 
     PARTS = [
-        Not(a=w(4).a[0], out=w.na0),
-        And(a=w(4).a[0], b=w.na0, out=w.zero),
-        Or(a=w(4).a[0], b=w.na0, out=w.one),
         FullAdder(a=w(4).a[0], b=w(4).q[0], carry_in=w.zero,
                   s=w(4).out[0], carry_out=w.adder0_carry_out),
         FullAdder(a=w(4).a[1], b=w(4).q[1], carry_in=w.adder0_carry_out,
@@ -121,13 +118,37 @@ class AutoCounter(Component):
         DFF(d=w(4).out[3], q=w(4).q[3]),
     ]
     
+class AutoCounter1Bit(Component):
+    IN = [w.a]
+    OUT = [w(4).out]
+
+    PARTS = [
+        FullAdder(a=w.a, b=w(4).q[0], carry_in=w.zero,
+                  s=w.out[0], carry_out=w.adder0_carry_out),
+        FullAdder(a=w.zero, b=w.q[1], carry_in=w.adder0_carry_out,
+                  s=w.out[1], carry_out=w.adder1_carry_out),
+        FullAdder(a=w.zero, b=w.q[2], carry_in=w.adder1_carry_out,
+                  s=w.out[2], carry_out=w.adder2_carry_out),
+        FullAdder(a=w.zero, b=w.q[3], carry_in=w.adder2_carry_out,
+                  s=w.out[3], carry_out=w.adder3_carry_out),
+        DFF(d=w.out[0], q=w.q[0]),
+        DFF(d=w.out[1], q=w.q[1]),
+        DFF(d=w.out[2], q=w.q[2]),
+        DFF(d=w.out[3], q=w.q[3]),
+    ]
+    
 class TestClockedComponent(unittest.TestCase):
     def setUp(self):
         self.counter = AutoCounter()
+        self.counter_1bit = AutoCounter1Bit()
 
     def test_auto_counter(self):
         for i in range(100):
             self.assertEqual(self.counter.eval_single(a=Signal(1,4)), Signal((i+1) % 16,4))
+
+    def test_auto_counter_1bit(self):
+        for i in range(100):
+            self.assertEqual(self.counter_1bit.eval_single(a=T), Signal((i+1) % 16,4))
 
 if __name__ == '__main__':
     unittest.main()

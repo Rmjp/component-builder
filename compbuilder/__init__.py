@@ -129,7 +129,7 @@ class Component:
     def normalize_component_wire_widths(self):
         def normalize_wire_width(wire, widths):
             if wire.name in widths:
-                return Wire(wire.name, widths[wire.name], wire.slice)
+                return Wire(wire.name, widths[wire.name], wire.slice, wire.constant_value)
             else:
                 return wire
         
@@ -162,6 +162,9 @@ class Component:
         for uid in self.nodes:
             u = self.nodes[uid]
             u.current_indegree = u.indegree
+            for w in u.in_wires.values():
+                if w.is_constant:
+                    u.current_indegree -= 1
 
         for wire in self.IN:
             e = self.edges[wire.get_key()]
@@ -313,16 +316,28 @@ class Component:
         self.normalize_component_wire_widths()
         self.build_graph()
         
+        self.set_constants()
+            
         self.is_initialized = True
 
     def propagate_output(self, u, output):
-        for k in u.component.OUT:
-            v = output[k.name]
-            estr = k.get_key()
+        for w in u.component.OUT:
+            v = output[w.name]
+            estr = w.get_key()
             wire = u.out_wires[estr]
             self.edges[u.out_dict[estr]]['value'] = wire.save_to_signal(self.edges[u.out_dict[estr]]['value'],v)
 
-    
+    def set_constants(self):
+        #if self.get_gate_name() == 'AutoCounter':
+        #    print('=================={}==================='.format(self.get_gate_name()))
+        #    print(self.edges)
+        for uid in self.nodes:
+            u = self.nodes[uid]
+            for w in u.in_wires.values():
+                if w.is_constant:
+                    estr = w.get_key()
+                    self.edges[estr]['value'] = w.get_constant_signal()
+            
     def process(self, **kwargs):
         self.initialize()
 
@@ -449,11 +464,12 @@ class Wire:
         self.name = name
         self.width = width
         self.slice = slice
-        if constant_value:
+        if constant_value != None:
             self.is_constant = True
             self.constant_value = constant_value
         else:
             self.is_constant = False
+            self.constant_value = None
         
     def __str__(self):
         return '{}:{}'.format(self.name, self.width)
@@ -463,9 +479,9 @@ class Wire:
 
     def __getitem__(self, key):
         if type(key) == slice:
-            return Wire(self.name, self.width, key)
+            return Wire(self.name, self.width, key, self.constant_value)
         else:
-            return Wire(self.name, self.width, slice(key,key+1))
+            return Wire(self.name, self.width, slice(key,key+1), self.constant_value)
 
     def slice_signal(self, signal):
         if self.slice:
@@ -473,14 +489,26 @@ class Wire:
         else:
             return signal
 
-    def save_to_signal(self, signal, value):
+    def get_constant_signal(self):
+        if not self.is_constant:
+            raise Exception('A non-constant wire does not have constant_value')
+        if self.slice:
+            signal = Signal(0, self.width)
+            signal.set_slice(self.slice, self.constant_value)
+            return signal
+        else:
+            return Signal(self.constant_value, self.width)
+        
+    def save_to_signal(self, signal, value_signal):
+        if self.is_constant:
+            raise Exception('Cannot save to constant wires')
         if self.slice:
             if signal == None:
                 signal = Signal(0, self.width)
-            signal.set_slice(self.slice, value)
+            signal.set_slice(self.slice, value_signal)
             return signal
         else:
-            return value
+            return value_signal
     
 class WireFactory:
     __instances = None
@@ -506,7 +534,11 @@ class WireFactory:
         return WireFactory.get_instance(width)
     
     def __getattr__(self, name):
-        return Wire(name, self.width)
+        if name in WireFactory.CONSTANT_FUNCTIONS:
+            value = WireFactory.CONSTANT_FUNCTIONS[name](self.width)
+            return Wire('__constant__{}_w{}_{}'.format(name, self.width, value), self.width, constant_value=value)
+        else:
+            return Wire(name, self.width)
     
     def __init__(self, width=1):
         if (WireFactory.__instances != None) and (width in WireFactory.__instances):
