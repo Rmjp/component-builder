@@ -138,7 +138,7 @@ class Component:
         for component in self.PARTS:
             for wire in component.IN + component.OUT:
                 key = wire.get_key()
-                actual_wire = component.get_actual_edge(wire.name)
+                actual_wire = component.get_actual_wire(wire.name)
                 all_wires.append(actual_wire)
             
         for w in all_wires:
@@ -151,9 +151,9 @@ class Component:
         self.OUT = [normalize_wire_width(w, widths) for w in self.OUT]
         for component in self.PARTS:
             for wire in component.IN + component.OUT:
-                actual_wire = component.get_actual_edge(wire.name)
-                component.set_actual_edge(wire.name, normalize_wire_width(actual_wire, widths))
-                new_actual_wire = component.get_actual_edge(wire.name)
+                actual_wire = component.get_actual_wire(wire.name)
+                component.set_actual_wire(wire.name, normalize_wire_width(actual_wire, widths))
+                new_actual_wire = component.get_actual_wire(wire.name)
 
                 
     def top_sort(self):
@@ -206,7 +206,7 @@ class Component:
     
     def add_wire_to_node_in_edge(self, node, wire, component):
         key = wire.get_key()
-        actual_wire = component.get_actual_edge(wire.name)
+        actual_wire = component.get_actual_wire(wire.name)
         actual_key = actual_wire.get_key()
         node.in_dict[key] = actual_key
         node.in_wires[key] = actual_wire
@@ -217,7 +217,7 @@ class Component:
                 
     def add_wire_to_node_out_edge(self, node, wire, component):
         key = wire.get_key()
-        actual_wire = component.get_actual_edge(wire.name)
+        actual_wire = component.get_actual_wire(wire.name)
         actual_key = actual_wire.get_key()
         node.out_dict[key] = actual_key
         node.out_wires[key] = actual_wire
@@ -294,10 +294,10 @@ class Component:
         print()
         """
         
-    def get_actual_edge(self, estr):
+    def get_actual_wire(self, estr):
         return self.wire_assignments[estr]
 
-    def set_actual_edge(self, estr, wire):
+    def set_actual_wire(self, estr, wire):
         self.wire_assignments[estr] = wire    
         
     def validate_config(self):
@@ -445,10 +445,15 @@ class Component:
     
     
 class Wire:
-    def __init__(self, name, width=1, slice=None):
+    def __init__(self, name, width=1, slice=None, constant_value=None):
         self.name = name
         self.width = width
         self.slice = slice
+        if constant_value:
+            self.is_constant = True
+            self.constant_value = constant_value
+        else:
+            self.is_constant = False
         
     def __str__(self):
         return '{}:{}'.format(self.name, self.width)
@@ -479,6 +484,13 @@ class Wire:
     
 class WireFactory:
     __instances = None
+
+    CONSTANT_FUNCTIONS = {
+        'T': lambda width: 1,
+        'F': lambda width: 0,
+        'one': lambda width: (1 << width) - 1,
+        'zero': lambda width: 0,
+    }
     
     @staticmethod
     def get_instance(width=1):
