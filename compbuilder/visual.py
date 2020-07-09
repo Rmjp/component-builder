@@ -1,6 +1,8 @@
+import re
 from copy import deepcopy
-from textwrap import dedent
+from textwrap import indent,dedent
 import json
+import compbuilder.flatten
 
 DEFAULT_LAYOUT_CONFIG = {
     'width' : 60,
@@ -13,137 +15,22 @@ DEFAULT_LAYOUT_CONFIG = {
     'connector_height' : 12,
 }
 
-COMPONENT_JS = """
-///////////////////////////////////////////////////
-var Component = function(config) {
-  this.config = config;
-  this.wires = {};
-  this.initialize();
-};
+COMPOUND_GATE_JS_TEMPLATE = indent(dedent('''
+  "{name}" : {{
+    IN: [{inputs}],
+    OUT: [{outputs}],
+  }}'''),'  ')
 
-///////////////////////////////////////////////////
-Component.SIGPAT = /^([A-Za-z_]\w*)(\[(\d+)(:(\d+))?\])?$/;
-Component.parse_signal = function(signal) {
-  // > Component.parse_signal('w')
-  // { name: 'w', start: 0, end: 0 }
-  // > Component.parse_signal('w[8:3]')
-  // { name: 'w', start: 8, end: 3 }
-  // > Component.parse_signal('output[0]')
-  // { name: 'output', start: 0, end: 0 }
-  // > Component.parse_signal('output[1]')
-  // { name: 'output', start: 1, end: 1 }
-  var m = Component.SIGPAT.exec(signal);
-  var name = m[1];
-  var start = m[3];
-  var end = m[5];
-  if (start)
-    end = end || start;
-  else {
-    start = 0;
-    end = 0;
-  }
-  return {name:name, start:parseInt(start), end:parseInt(end)};
-};
-
-///////////////////////////////////////////////////
-Component.prototype.initialize = function() {
-  // recursively instantiate all of the component's parts based on their
-  // configurations
-  this.parts = {};
-  this.topo_ordering = [];
-  if (this.config.parts) {
-    for (var p of this.config.parts) {
-      var inner_comp = new Component(p.config);
-      inner_comp.initialize();
-      inner_comp.id = p.id;
-      inner_comp.wiring = p.wiring;
-      this.topo_ordering.push(p.id);
-      this.parts[p.id] = inner_comp;
-    }
-  }
-};
-
-///////////////////////////////////////////////////
-Component.prototype.set_signal = function(signal,value) {
-  var sig = Component.parse_signal(signal);
-  var mask = (1 << (sig.start-sig.end+1)) - 1;
-  value = (value & mask) << sig.end;
-  var newval = this.wires[sig.name] || 0;
-  // enforce unsigned with >>> operator
-  this.wires[sig.name] = ((newval & ~(mask << sig.end)) | value) >>> 0;
-  return this;
-};
-
-///////////////////////////////////////////////////
-Component.prototype.get_signal = function(signal) {
-  var sig = Component.parse_signal(signal);
-  var value = this.wires[sig.name];
-  if (value == undefined)
-    throw "Undefined signal value";
-  var mask = (1 << (sig.start-sig.end+1)) - 1;
-  // enforce unsigned with >>> operator
-  return ((value >> sig.end) & mask) >>> 0;
-};
-
-///////////////////////////////////////////////////
-Component.prototype.process = function(inputs) {
-  // populate input wires
-  for (var k in inputs) {
-    this.wires[k] = inputs[k];
-  }
-
-  // use component's own process when available
-  if (this.config.process) {
-    for (var output of this.config.outputs) {
-      var value = this.config.process[output](inputs);
-      this.set_signal(output,value);
-    }
-  }
-  else { // otherwise, call each internal component one by one
-    for (var id of this.topo_ordering) {
-      var p = this.parts[id];
-      // assign input values for the inner part p from the incoming wires
-      for (var input of p.config.inputs) {
-        var value = this.get_signal(p.wiring[input])
-        p.set_signal(input,value);
-      }
-      p.process(p.wires);
-      // assign resulting outputs to outgoing wires
-      for (var output of p.config.outputs) {
-        this.set_signal(p.wiring[output],p.wires[output]);
-      }
-    }
-  }
-}
-"""
-
-GATE_JS_TEMPLATE = dedent('''
-  GATES.{name} = {{
-    name: "{name}",
-    inputs: [{inputs}],
-    outputs: [{outputs}],
-    parts: [ // must be topologically sorted
-  {parts}
-    ]
-  }};''')
-
-PRIMITIVE_GATE_JS_TEMPLATE = dedent('''
-  GATES.{name} = {{
-    name: "{name}",
-    inputs: [{inputs}],
-    outputs: [{outputs}],
-    parts: [],
+PRIMITIVE_GATE_JS_TEMPLATE = indent(dedent('''
+  "{name}" : {{
+    IN: [{inputs}],
+    OUT: [{outputs}],
     process: {{
   {process}
     }}
-  }};''')
+  }}'''),'  ')
 
-PART_JS_TEMPLATE = ' '*4 + '{{ id: {id}, config: GATES.{name}, wiring: {{{wiring}}} }},'
-PROCESS_JS_TEMPLATE = ' '*4 + '"{pin}" : function(w) {{ {statement} }},'
-NEW_COMPONENT_JS_TEMPLATE = dedent('''
-  var component = new Component(GATES.{name});
-  component.process({{{inputs}}});
-''')
+PROCESS_JS_TEMPLATE = ' '*4 + '"{pin}" : {function},'
 
 ################################
 class VisualMixin:
@@ -151,7 +38,7 @@ class VisualMixin:
     ################
     def _create_body(self,comp_id):
         body = {
-            'id' : f'N{comp_id}',
+            'id' : f'{comp_id}',
             'width' : self.config['width'],
             'height' : self.config['height'],
         }
@@ -239,12 +126,7 @@ class VisualMixin:
         return { 'sources' : [src], "targets" : [dst] }
 
     ################
-    def _generate_elk(self,depth,base_id=''):
-        # instantiate the component class so that we can work with
-        # subcomponent graph
-        if self.graph is None:
-            self.initialize()
-
+    def _generate_elk(self,depth,netmap,base_id=''):
         self.config = deepcopy(DEFAULT_LAYOUT_CONFIG)
         # override with component's layout configuration (if exists) when it
         # is a primitive component or it is shown without internal components
@@ -260,19 +142,19 @@ class VisualMixin:
                 port_max = max(len(self.IN),len(self.OUT))
                 self.config['height'] = port_max * self.config['port_spacing']
             if 'label' not in self.config:
-                self.config['label'] = self.get_gate_name() + base_id.replace('_','-')
-            box = self._create_body(base_id)
+                self.config['label'] = self.name
+            box = self._create_body(self.name)
         else:
             children = []
             for i,node in self.graph['nodes'].items():
                 subcomp_id = f'{base_id}_{i}'
-                subcomp,inner_port_map[i] = node.component._generate_elk(depth-1,subcomp_id)
+                subcomp,inner_port_map[i] = node.component._generate_elk(depth-1,netmap,subcomp_id)
                 subcomp['node_id'] = node.id
                 children.append(subcomp)
             # use original label when internal components are shown
-            self.config['label'] = self.get_gate_name() + base_id.replace('_','-')
+            self.config['label'] = self.name
             box = {
-                'id' : f'N{base_id}',
+                'id' : self.name,
                 'children' : children,
                 }
 
@@ -294,7 +176,9 @@ class VisualMixin:
             port_id = f'{base_id}_{i}'
             elk_port = self._create_port(wire,port_id,i,type)
             # attach wire's name to help styling
-            elk_port['wire'] = wire.name
+            netwire = VisualMixin._generate_net_wiring(self.wiring[wire.get_key()],netmap)
+            netwire['name'] = wire.name
+            elk_port['wire'] = netwire
             elk_ports.append(elk_port)
             port_map[wire.get_key()] = elk_port['id']
         box['ports'] = elk_ports
@@ -329,7 +213,9 @@ class VisualMixin:
                     end = dests[(node.id,pin)]
                     edge = self._create_edge(start,end)
                     # attach wire's name to help styling
-                    edge['wire'] = node.in_wires[pin].name
+                    netwire = VisualMixin._generate_net_wiring(node.component.wiring[pin],netmap)
+                    netwire['name'] = node.in_wires[pin].name
+                    edge['wire'] = netwire
                     edges.append(edge)
 
             # output to outer ports are not yet wired; take care of them
@@ -339,7 +225,9 @@ class VisualMixin:
                 end = dests[(None,wire)]
                 edge = self._create_edge(start,end)
                 # attach wire's name to help styling
-                edge['wire'] = pin.name
+                netwire = VisualMixin._generate_net_wiring(self.wiring[pin.get_key()],netmap)
+                netwire['name'] = pin.name
+                edge['wire'] = netwire
                 edges.append(edge)
 
             # enumerate all edges and give them proper IDs
@@ -380,32 +268,20 @@ class VisualMixin:
         return resolved
 
     ################
-    def _generate_gate_config_js(self):
-        name = self.__class__.__name__
-        inputs = ','.join([f'"{w.name}"' for w in self.IN])
-        outputs = ','.join([f'"{w.name}"' for w in self.OUT])
-        if self.graph is None:
-            self.initialize()
-        if self.PARTS:  # compound component
-            parts = []
-            for node in self.topo_ordering:
-                component = node.component
-                wires = component.wire_assignments
-                wstr = ','.join(f'"{k}":"{v.name}"' for k,v in wires.items())
-                parts.append(PART_JS_TEMPLATE.format(
-                    id=node.id,
-                    name=component.__class__.__name__,
-                    wiring=wstr,
-                ))
-            return GATE_JS_TEMPLATE.format(
+    @classmethod
+    def _generate_part_config(cls):
+        name = cls.__name__
+        inputs = ','.join([f'"{w.name}"' for w in cls.IN])
+        outputs = ','.join([f'"{w.name}"' for w in cls.OUT])
+        if cls.PARTS:
+            return COMPOUND_GATE_JS_TEMPLATE.format(
                 name=name,
                 inputs=inputs,
                 outputs=outputs,
-                parts='\n'.join(parts),
             )
-        else: # primitive component
-            process = [PROCESS_JS_TEMPLATE.format(pin=k,statement=v)
-                        for k,v in self.process.js.items()]
+        else:
+            process = [PROCESS_JS_TEMPLATE.format(pin=k,function=v)
+                        for k,v in cls.process.js.items()]
             return PRIMITIVE_GATE_JS_TEMPLATE.format(
                 name=name,
                 inputs=inputs,
@@ -415,21 +291,24 @@ class VisualMixin:
 
     ################
     def generate_elk(self,depth=0,**kwargs):
-        layout,port_map = self._generate_elk(depth,**kwargs)
+        layout,port_map = self._generate_elk(depth,self.netmap,**kwargs)
 
         connectors = []
         conlinks = []
         ports = [(p,'in') for p in self.IN[::-1]]
         ports += [(p,'out') for p in self.OUT]
         for i,(port,dir) in enumerate(ports):
+            netwire = VisualMixin._generate_net_wiring(
+                    self.wiring[port.get_key()],self.netmap)
+            netwire['name'] = port.name
             connector = self._create_connector(i,dir)
-            connector['wire'] = port.name
+            connector['wire'] = netwire
             connectors.append(connector)
             connector_id = connector['ports'][0]['id']
             port_id = port_map[port.get_key()]
             conlink = self._create_edge(connector_id,port_id)
             conlink['id'] = f'CE_{i}'
-            conlink['wire'] = port.name
+            conlink['wire'] = netwire
             conlinks.append(conlink)
 
         return {
@@ -447,34 +326,126 @@ class VisualMixin:
             node_map[c['id']] = part_expr
             self._generate_node_map(c,node_map,part_expr)
 
+    ################
+    @staticmethod
+    def _generate_net_wiring(net_wiring,netmap):
+        net,nslice = net_wiring
+        start,stop,_ = nslice.indices(net.width)
+        if (start,stop) == (0,1): # single wire; omit slicing
+            return {
+                'net' : netmap[net],
+            }
+        else:
+            return {
+                'net' : netmap[net],
+                'slice' : [stop-1,start],
+            }
+
+    ################
+    @staticmethod
+    def _generate_wiring(comp,netmap):
+        wiring = {}
+        for w in comp.IN + comp.OUT:
+            wiring[w.name] = VisualMixin._generate_net_wiring(
+                    comp.wiring[w.get_key()],netmap)
+        return wiring
+
+    ################
+    def _generate_component_config(self):
+        # create component->index mappings
+        # component list consists of the main component itself, and all its
+        # primitives and wirings
+        partmap = {}
+        for i,part in enumerate([self] + self.primitives):
+            partmap[part] = i
+
+        # create net->index mappings
+        self.netmap = {}
+        for i,net in enumerate(self.netlist):
+            self.netmap[net] = i
+
+        # generate primitive component wiring 
+        parts = []
+        for comp in [self] + self.primitives:
+            wiring = VisualMixin._generate_wiring(comp,self.netmap)
+            parts.append({
+                'name': comp.name,
+                'config': comp.get_gate_name(),
+                'wiring': wiring,
+            })
+
+        # generate netlist config
+        nets = []
+        for net in self.netlist:
+            sources = []
+            for source in net.sources:
+                start,stop,_ = source.slice.indices(net.width)
+                if (start,stop) == (0,1): # single wire; omit slicing
+                    sources.append({
+                        'part' : partmap[source.component],
+                        'wire' : source.wire.name,
+                    })
+                else: 
+                    sources.append({
+                        'part' : partmap[source.component],
+                        'wire' : source.wire.name,
+                        'slice' : [stop-1,start],
+                    })
+            nets.append({
+                'name' : net.name,
+                'width' : net.width,
+                'signal' : net.signal.get(),
+                'sources' : sources,
+                'wiring' : VisualMixin._generate_wiring(comp,self.netmap),
+            })
+
+        # combine all configs
+        config = {
+            'parts': parts,
+            'nets': nets,
+        }
+        return config
 
     ################
     def generate_js(self,indent=None,depth=0,**kwargs):
-        gates = self._resolve_dependencies()
-        lines = [COMPONENT_JS, 'var GATES = {}']
-        for g in gates:
-            lines.append(g()._generate_gate_config_js())
-        lines.append(NEW_COMPONENT_JS_TEMPLATE.format(
-            name=self.__class__.__name__,
-            inputs=','.join(f"{w.name}:0" for w in self.IN),
-        ))
+        self.flatten()
+        lines = []
+
+        # main component configuration
+        comp_js = json.dumps(self._generate_component_config(),indent=indent)
+        lines.append('var comp_config = ' + comp_js + ';')
+
+        # main component's wiring and all used primitives
+        used_primitives = set(p.__class__ for p in self.primitives)
+        part_configs_js = ','.join(p._generate_part_config()
+                for p in [self.__class__]+list(used_primitives))
+        lines.append('')
+        lines.append('comp_config.part_configs = {' + part_configs_js + '\n};')
+
+        # instantiate the main component
+        lines.append('')
+        lines.append('var component = new Component(comp_config);')
+
+        # ELK graph
+        lines.append('')
         elk = self.generate_elk(depth,**kwargs)
-        lines.append('var graph = {}'.format(
-            json.dumps(elk,indent=indent)))
+        lines.append('var graph = '
+                + json.dumps(elk,indent=indent)
+                + ';')
 
-        # create mapping from ELK's node id to corresponding component
+        ## create mapping from ELK's node id to corresponding component
+        #lines.append('')
+        #lines.append('var node_map = {}')
+        #node_map = {}
+        #self._generate_node_map(elk['children'][0],node_map,'component')
+        ## create the mapping for the root component manually
+        #node_map[elk['children'][0]['id']] = 'component'
+        #node_map['root'] = 'component'
+
+        #for k,v in node_map.items():
+        #    lines.append(f'node_map.{k} = {v}')
+
         lines.append('')
-        lines.append('var node_map = {}')
-        node_map = {}
-        self._generate_node_map(elk['children'][0],node_map,'component')
-        # create the mapping for the root component manually
-        node_map[elk['children'][0]['id']] = 'component'
-        node_map['root'] = 'component'
-
-        for k,v in node_map.items():
-            lines.append(f'node_map.{k} = {v}')
-
-        lines.append('')
-        lines.append('var config = {component: component, graph: graph, node_map: node_map};');
+        lines.append('var config = {component: component, graph: graph};');
 
         return '\n'.join(lines)

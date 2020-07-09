@@ -91,10 +91,10 @@ function drawChildren(svg,node) {
         .attr("y", function(p) { return p.y; })
         .attr("width", function(p) { return p.width; })
         .attr("height", function(p) { return p.height; })
-        .each(function(p) { // attach node-id
-          p.node_id = n.id;
-          if (p.type == "connector") // refer to root node for connectors' ports
-            p.node_id = "root";
+        .each(function(p) { 
+          // for 'connector' node, propagate wire object into ports
+          if (p.type == "connector")
+            p.wire = n.wire;
         })
         .each(function(p) { // draw port label
           if (p.labels) {
@@ -143,9 +143,6 @@ function drawEdges(svg,node) {
     .attr("d", createPath)
     .attr("stroke", "black")
     .attr("fill", "none")
-    .each(function(e) { // attach node-id
-      e.node_id = node.id;
-    })
     .each(function(e) { // draw junction points
       if (e.junctionPoints) {
         var juncGroup = svg.append("g");
@@ -170,23 +167,23 @@ function drawNode(svg,node) {
 }
 
 //////////////////////////////////
-function update(svg,node_map) {
+function update(svg,component) {
   svg.selectAll("path.edge")
     .classed("T", function(e) {
-      return node_map[e.node_id].wires[e.wire];
+      return component.nets[e.wire.net].signal;
     });
   svg.selectAll("rect.port")
     .classed("T", function(p) {
-      return node_map[p.node_id].wires[p.wire];
+      return component.nets[p.wire.net].signal;
     });
   svg.selectAll("path.connector")
     .classed("T", function(c) {
-      return node_map[c.node_id].wires[c.wire];
+      return component.nets[c.wire.net].signal;
     });
 }
 
 //////////////////////////////////
-function attach_inputs(svg,component,node_map) {
+function attach_inputs(svg,component) {
   svg.selectAll(".connector.in")
     .on("mouseover", function(c) {
       d3.select(this).classed("hover",true);
@@ -195,10 +192,10 @@ function attach_inputs(svg,component,node_map) {
       d3.select(this).classed("hover",false);
     })
     .on("click", function(c) {
-      var value = node_map[c.node_id].wires[c.wire];
-      value = value ? 0 : 1;
-      component.process({[c.wire]:value});
-      update(svg,node_map);
+      var signal = component.nets[c.wire.net].signal;
+      signal = signal ? 0 : 1;
+      var out = component.update({[c.wire.name]:signal});
+      update(svg,component);
     });
 }
 
@@ -210,8 +207,8 @@ function create(selector,config) {
                                    .attr("width", layout.width)
                                    .attr("height", layout.height);
     drawNode(svg,layout);
-    attach_inputs(svg,config.component,config.node_map);
-    update(svg,config.node_map);
+    attach_inputs(svg,config.component);
+    update(svg,config.component);
   });
 }
 

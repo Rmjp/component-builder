@@ -13,7 +13,7 @@ class Nand(VisualMixin,Component):
         'height' : 40,
         'port_width' : 0,
         'port_height' : 16,
-        'label' : '',
+        #'label' : '',
         'ports' : {  # hide all port labels
             'a' : {'label' : ''},
             'b' : {'label' : ''},
@@ -31,11 +31,11 @@ class Nand(VisualMixin,Component):
 
     def process(self, a, b):
         if (a.get()==1) and (b.get()==1):
-            return [Signal(0)]
+            return {'out': Signal(0)}
         else:
-            return [Signal(1)]
+            return {'out': Signal(1)}
     process.js = {
-        'out' : 'return (w.a==1) && (w.b==1) ? 0 : 1;',
+        'out' : 'function(w) { return (w.a==1) && (w.b==1) ? 0 : 1; }',
     }
 
 
@@ -201,6 +201,18 @@ class FullAdder(VisualMixin,Component):
     ]
 
 
+class And2(VisualMixin,Component):
+    IN = [w(2).a, w(2).b]
+    OUT = [w(2).out]
+
+    PARTS = [
+        And(a=w(2).a[0], b=w(2).b[0],
+             out=w(2).out[0]),
+        And(a=w(2).a[1], b=w(2).b[1],
+             out=w(2).out[1]),
+    ]
+
+
 class And8(VisualMixin,Component):
     IN = [w(8).a, w(8).b]
     OUT = [w(8).out]
@@ -215,3 +227,33 @@ class And8(VisualMixin,Component):
         for i in range(8):
             And8.PARTS.append(And(a=w(8).a[i], b=w(8).b[i],
                                   out=w(8).out[i]))
+
+
+class DFF(VisualMixin,Component):
+    IN = [w.d,w.clk]
+    OUT = [w.q]
+
+    PARTS = []
+    TRIGGER = [w.clk]
+    LATCH = [w.q]
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._clk = Signal(0) 
+        self._q = Signal(0)
+        self.is_clocked_component = True
+    
+    def process(self,d,clk):
+        if self._clk.get() == 0 and clk.get() == 1:
+            self._q = d
+        self._clk = clk
+        return {'q':self._q}
+    process.js = {
+        'q' : '''
+            function(w,s) { // wires,states
+              if (s.clk == 0 && w.clk == 1)
+                s.q = w.d;
+              s.clk = w.clk;
+              return s.q;
+            }''',
+    }
