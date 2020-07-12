@@ -1,0 +1,41 @@
+.node {
+  stroke: black;
+  fill: #0000ff10;
+  /* fill: transparent; */
+}
+
+rect.port {
+  fill: grey;
+}
+
+rect.port.T {
+  fill: lightgreen;
+}
+
+path.connector {
+  fill: white;
+}
+
+path.connector.T {
+  fill: lightgreen;
+}
+
+path.connector.hover {
+  stroke-width: 3px;
+}
+
+path.edge {
+  stroke-width: 1px;
+  stroke: #888888;
+}
+
+path.edge.T {
+  stroke-width: 3px;
+  stroke: green;
+}
+
+text.label {
+  font-family: Arial;
+  font-size: 80%;
+}
+
