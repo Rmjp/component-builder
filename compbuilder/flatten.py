@@ -1,6 +1,5 @@
 from collections import deque
 from compbuilder import Component, Wire, w
-from visual_gates import *
 
 ##############################################
 class Net:
