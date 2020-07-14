@@ -1,5 +1,5 @@
 from collections import deque
-from compbuilder import Component, Wire, w
+from compbuilder import Component, Wire, w, Signal
 
 ##############################################
 class Net:
