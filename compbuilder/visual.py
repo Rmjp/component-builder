@@ -197,11 +197,11 @@ class VisualMixin:
             # collect internal pin IDs
             for node in self.graph['nodes'].values():
                 for pin in node.component.IN:
-                    wire = node.component.get_actual_edge(pin.name)
+                    wire = node.component.get_actual_wire(pin.name)
                     dests[(node.id,pin.get_key())] = inner_port_map[node.id][pin.get_key()]
 
                 for pin in node.component.OUT:
-                    wire = node.component.get_actual_edge(pin.name)
+                    wire = node.component.get_actual_wire(pin.name)
                     sources[wire.get_key()] = inner_port_map[node.id][pin.get_key()]
 
             edges = []
