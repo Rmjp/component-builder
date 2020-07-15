@@ -1,4 +1,4 @@
-class NotLayOutMixin:
+class NotLayoutMixin:
     LAYOUT_CONFIG = {
         'width' : 38,
         'height' : 40,
