@@ -75,7 +75,7 @@ class Signal:
 
 Signal.F = Signal(0)
 Signal.T = Signal(1)
-    
+
 class Component:
     class Node:
         def __init__(self, id, component):

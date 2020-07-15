@@ -449,3 +449,23 @@ class VisualMixin:
         lines.append('var config = {component: component, graph: graph};');
 
         return '\n'.join(lines)
+
+    
+def interact(component_class,**kwargs):
+    import IPython.display as DISP
+
+    DISP.display_html(DISP.HTML("""
+        <script src="https://d3js.org/d3.v5.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/elkjs@0.6.2/lib/elk.bundled.js"></script>
+        <script src="https://www.cpe.ku.ac.th/~cpj/tmp/component.js"></script>
+        <script src="https://www.cpe.ku.ac.th/~cpj/tmp/visual.js"></script>
+    """))
+    DISP.display_html(
+        DISP.HTML('<script>' + component_class().generate_js(**kwargs) + '</script>'))
+    DISP.display_html(DISP.HTML("""
+        <link rel="stylesheet" type="text/css" href="https://www.cpe.ku.ac.th/~cpj/tmp/styles.css" />
+        <div id="diagram"></div>
+        <script>
+          compbuilder.create("#diagram",config);
+        </script>
+    """))
