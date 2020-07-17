@@ -13,21 +13,21 @@ class TestDFF(unittest.TestCase):
         self.dff = DFF()
 
     def test_sequence(self):
-        self.assertEqual(self.dff.eval_single(d=T), F)
-        self.assertEqual(self.dff.eval_single(d=F), T)
-        self.assertEqual(self.dff.eval_single(d=F), F)
-        self.assertEqual(self.dff.eval_single(d=T), F)
-        self.assertEqual(self.dff.eval_single(d=T), T)
-        self.assertEqual(self.dff.eval_single(d=F), T)
-        self.assertEqual(self.dff.eval_single(d=F), F)
+        self.assertEqual(self.dff.eval_single(In=T), F)
+        self.assertEqual(self.dff.eval_single(In=F), T)
+        self.assertEqual(self.dff.eval_single(In=F), F)
+        self.assertEqual(self.dff.eval_single(In=T), F)
+        self.assertEqual(self.dff.eval_single(In=T), T)
+        self.assertEqual(self.dff.eval_single(In=F), T)
+        self.assertEqual(self.dff.eval_single(In=F), F)
 
 class FlipComp(Component):
     IN = []
     OUT = [w.out]
 
     PARTS = [
-        DFF(d=w.a, q=w.out),
-        Not(a=w.out, out=w.a)
+        DFF(In=w.a, out=w.out),
+        Not(In=w.out, out=w.a)
     ]
     
 class SeqComp1(Component):
@@ -35,7 +35,7 @@ class SeqComp1(Component):
     OUT = [w.out]
 
     PARTS = [
-        DFF(d=w.a, q=w.out),
+        DFF(In=w.a, out=w.out),
     ]
     
 class SeqComp2(Component):
@@ -43,8 +43,8 @@ class SeqComp2(Component):
     OUT = [w.out]
 
     PARTS = [
-        DFF(d=w.a, q=w.b),
-        DFF(d=w.b, q=w.out),
+        DFF(In=w.a, out=w.b),
+        DFF(In=w.b, out=w.out),
     ]
     
 class SeqComp3(Component):
@@ -52,10 +52,10 @@ class SeqComp3(Component):
     OUT = [w.out]
 
     PARTS = [
-        DFF(d=w.a, q=w.b),
-        DFF(d=w.b, q=w.c),
-        Not(a=w.c, out=w.d),
-        DFF(d=w.d, q=w.out),
+        DFF(In=w.a, out=w.b),
+        DFF(In=w.b, out=w.c),
+        Not(In=w.c, out=w.d),
+        DFF(In=w.d, out=w.out),
     ]
 
 class TestClockedComponent(unittest.TestCase):
@@ -74,30 +74,30 @@ class TestClockedComponent(unittest.TestCase):
         self.assertEqual(self.flip.eval_single(), T)
 
     def test_seq1(self):
-        self.assertEqual(self.seq1.eval_single(a=T), F)
-        self.assertEqual(self.seq1.eval_single(a=F), T)
-        self.assertEqual(self.seq1.eval_single(a=F), F)
-        self.assertEqual(self.seq1.eval_single(a=T), F)
-        self.assertEqual(self.seq1.eval_single(a=F), T)
+        self.assertEqual(self.seq1.eval_single(In=T), F)
+        self.assertEqual(self.seq1.eval_single(In=F), T)
+        self.assertEqual(self.seq1.eval_single(In=F), F)
+        self.assertEqual(self.seq1.eval_single(In=T), F)
+        self.assertEqual(self.seq1.eval_single(In=F), T)
         
     def test_seq2(self):
-        self.assertEqual(self.seq2.eval_single(a=T), F)
-        self.assertEqual(self.seq2.eval_single(a=F), F)
-        self.assertEqual(self.seq2.eval_single(a=F), T)
-        self.assertEqual(self.seq2.eval_single(a=T), F)
-        self.assertEqual(self.seq2.eval_single(a=F), F)
-        self.assertEqual(self.seq2.eval_single(a=F), T)
-        self.assertEqual(self.seq2.eval_single(a=F), F)
+        self.assertEqual(self.seq2.eval_single(In=T), F)
+        self.assertEqual(self.seq2.eval_single(In=F), F)
+        self.assertEqual(self.seq2.eval_single(In=F), T)
+        self.assertEqual(self.seq2.eval_single(In=T), F)
+        self.assertEqual(self.seq2.eval_single(In=F), F)
+        self.assertEqual(self.seq2.eval_single(In=F), T)
+        self.assertEqual(self.seq2.eval_single(In=F), F)
         
     def test_seq3(self):
-        self.assertEqual(self.seq3.eval_single(a=T), F)
-        self.assertEqual(self.seq3.eval_single(a=F), T)
-        self.assertEqual(self.seq3.eval_single(a=F), T)
-        self.assertEqual(self.seq3.eval_single(a=T), F)
-        self.assertEqual(self.seq3.eval_single(a=F), T)
-        self.assertEqual(self.seq3.eval_single(a=F), T)
-        self.assertEqual(self.seq3.eval_single(a=F), F)
-        self.assertEqual(self.seq3.eval_single(a=F), T)
+        self.assertEqual(self.seq3.eval_single(In=T), F)
+        self.assertEqual(self.seq3.eval_single(In=F), T)
+        self.assertEqual(self.seq3.eval_single(In=F), T)
+        self.assertEqual(self.seq3.eval_single(In=T), F)
+        self.assertEqual(self.seq3.eval_single(In=F), T)
+        self.assertEqual(self.seq3.eval_single(In=F), T)
+        self.assertEqual(self.seq3.eval_single(In=F), F)
+        self.assertEqual(self.seq3.eval_single(In=F), T)
         
 class AutoCounter(Component):
     IN = [w(4).a]
@@ -112,10 +112,10 @@ class AutoCounter(Component):
                   s=w(4).out[2], carry_out=w.adder2_carry_out),
         FullAdder(a=w(4).a[3], b=w(4).q[3], carry_in=w.adder2_carry_out,
                   s=w(4).out[3], carry_out=w.adder3_carry_out),
-        DFF(d=w(4).out[0], q=w(4).q[0]),
-        DFF(d=w(4).out[1], q=w(4).q[1]),
-        DFF(d=w(4).out[2], q=w(4).q[2]),
-        DFF(d=w(4).out[3], q=w(4).q[3]),
+        DFF(In=w(4).out[0], out=w(4).q[0]),
+        DFF(In=w(4).out[1], out=w(4).q[1]),
+        DFF(In=w(4).out[2], out=w(4).q[2]),
+        DFF(In=w(4).out[3], out=w(4).q[3]),
     ]
     
 class AutoCounter1Bit(Component):
@@ -131,10 +131,10 @@ class AutoCounter1Bit(Component):
                   s=w.out[2], carry_out=w.adder2_carry_out),
         FullAdder(a=w.zero, b=w.q[3], carry_in=w.adder2_carry_out,
                   s=w.out[3], carry_out=w.adder3_carry_out),
-        DFF(d=w.out[0], q=w.q[0]),
-        DFF(d=w.out[1], q=w.q[1]),
-        DFF(d=w.out[2], q=w.q[2]),
-        DFF(d=w.out[3], q=w.q[3]),
+        DFF(In=w.out[0], out=w.q[0]),
+        DFF(In=w.out[1], out=w.q[1]),
+        DFF(In=w.out[2], out=w.q[2]),
+        DFF(In=w.out[3], out=w.q[3]),
     ]
     
 class TestClockedComponent(unittest.TestCase):

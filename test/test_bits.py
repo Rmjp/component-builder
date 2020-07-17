@@ -9,34 +9,12 @@ from compbuilder.tracing import trace
 T = Signal.T
 F = Signal.F
 
-class DFF(Component):
-    IN = [w.In]
-    OUT = [w.out]
-
-    PARTS = []
-
-    def __init__(self, **kwargs):
-        super(DFF, self).__init__(**kwargs)
-        self.is_clocked_component = True
-    
-    def process_deffered(self):
-        if self.saved_input_kwargs == None:
-            self.saved_ouput = {'out': Signal(0)}
-        else:
-            self.saved_ouput = {'out': self.saved_input_kwargs['In']}
-        return self.saved_ouput
-
-    def process(self, In):
-        self.saved_input_kwargs = {'In': In}
-        return self.saved_ouput
-
-
 class Mux(Component):
     IN = [w.a, w.b, w.sel]
     OUT = [w.out]
     
     PARTS = [
-        Not(a=w.sel, out=w.notsel),
+        Not(In=w.sel, out=w.notsel),
         And(a=w.a, b=w.notsel, out=w.anotsel),
         And(a=w.b, b=w.sel, out=w.bsel),
         Or(a=w.anotsel, b=w.bsel, out=w.out),

@@ -17,8 +17,8 @@ class Nand(Component):
             return {'out': Signal(1)}
 
 class DFF(Component):
-    IN = [w.d]
-    OUT = [w.q]
+    IN = [w.In]
+    OUT = [w.out]
 
     PARTS = []
 
@@ -28,22 +28,22 @@ class DFF(Component):
     
     def process_deffered(self):
         if self.saved_input_kwargs == None:
-            self.saved_ouput = {'q': Signal(0)}
+            self.saved_output = {'out': Signal(0)}
         else:
-            self.saved_ouput = {'q': self.saved_input_kwargs['d']}
-        return self.saved_ouput
+            self.saved_output = {'out': self.saved_input_kwargs['In']}
+        return self.saved_output
 
-    def process(self, d):
-        self.saved_input_kwargs = {'d': d}
-        return self.saved_ouput
+    def process(self, In):
+        self.saved_input_kwargs = {'In': In}
+        return self.saved_output
 
 
 class Not(Component):
-    IN = [w.a]
+    IN = [w.In]
     OUT = [w.out]
 
     PARTS = [
-        Nand(a=w.a, b=w.a, out=w.out),
+        Nand(a=w.In, b=w.In, out=w.out),
     ]
 
 class And(Component):
@@ -52,7 +52,7 @@ class And(Component):
 
     PARTS = [
         Nand(a=w.a, b=w.b, out=w.c),
-        Not(a=w.c, out=w.out),
+        Not(In=w.c, out=w.out),
     ]
 
 class Or(Component):
@@ -60,8 +60,8 @@ class Or(Component):
     OUT = [w.out]
 
     PARTS = [
-        Not(a=w.a, out=w.na),
-        Not(a=w.b, out=w.nb),
+        Not(In=w.a, out=w.na),
+        Not(In=w.b, out=w.nb),
         Nand(a=w.na, b=w.nb, out=w.out),
     ]
 
@@ -70,8 +70,8 @@ class Xor(Component):
     OUT = [w.out]
 
     PARTS = [
-        Not(a=w.a, out=w.na),
-        Not(a=w.b, out=w.nb),
+        Not(In=w.a, out=w.na),
+        Not(In=w.b, out=w.nb),
         And(a=w.a, b=w.nb, out=w.and1),
         And(a=w.b, b=w.na, out=w.and2),
         Or(a=w.and1, b=w.and2, out=w.out),

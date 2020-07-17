@@ -28,10 +28,10 @@ class TestNotGate(unittest.TestCase):
         self.not_gate = Not()
 
     def test_input_F(self):
-        self.assertEqual(self.not_gate.eval_single(a=F), T)
+        self.assertEqual(self.not_gate.eval_single(In=F), T)
 
     def test_input_T(self):
-        self.assertEqual(self.not_gate.eval_single(a=T), F)
+        self.assertEqual(self.not_gate.eval_single(In=T), F)
 
 
 class TestOrGate(unittest.TestCase):
