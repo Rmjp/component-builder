@@ -35,8 +35,11 @@ class Signal:
     def __eq__(self, other):
         if other == None:
             return False
-        return ((self.width == other.width) and
-                (self.value == other.value))
+        if type(other) == int:
+            return self.value == other
+        else:
+            return ((self.width == other.width) and
+                    (self.value == other.value))
 
     def __str__(self):
         fmt = '{:0%db}' % (self.width,)
@@ -341,6 +344,8 @@ class Component:
     def process(self, **kwargs):
         self.initialize()
 
+        self.saved_input_kwargs = kwargs
+        
         for wire in self.IN:
             key = wire.get_key()
             self.edges[key]['value'] = kwargs[wire.name]
@@ -352,11 +357,9 @@ class Component:
                 input_kwargs[k[0]] = wire.slice_signal(self.edges[u.in_dict[k]]['value'])
 
             #print("IN:", u.component, u.in_dict, input_kwargs)
+            output = u.component._process(**input_kwargs)
             if not u.is_deferred:
-                output = u.component._process(**input_kwargs)
                 self.propagate_output(u, output)
-            else:
-                u.component.saved_input_kwargs = input_kwargs
             
         return {wire.name:self.edges[wire.get_key()]['value'] for wire in self.OUT}
 
