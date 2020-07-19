@@ -1,4 +1,5 @@
 import re
+import math
 from copy import deepcopy
 from textwrap import indent,dedent
 import json
@@ -99,13 +100,19 @@ class VisualMixin:
         return port
 
     ################
-    def _create_connector(self,port_id,dir):
+    def _create_connector(self,port_id,dir,bits):
         port_side = {'in':'EAST','out':'WEST'}[dir]
+        if bits == 1:
+            conn_width = self.config['connector_width']
+        else: # bus wire
+            # guestimate text width from bus width
+            conn_width = int(6*bits/4) + 16
         return {
             'id' : f'C:{port_id}',
             'type' : 'connector',
             'direction' : dir,
-            'width' : self.config['connector_width'],
+            'bits' : bits,
+            'width' : conn_width,
             'height' : self.config['connector_height'],
             'ports' : [{
                 'id': f'C{dir[0].upper()}:{port_id}',
@@ -123,8 +130,9 @@ class VisualMixin:
         }
 
     ################
-    def _create_constant(self,value,port_id):
-        label = str(value)
+    def _create_constant(self,value,bits,port_id):
+        hex_digits = math.ceil(bits/4)
+        label = f'{value:0{hex_digits}X}'
         width = 6*len(label)
         height = self.config['const_height']
 
@@ -236,6 +244,7 @@ class VisualMixin:
                     if wire.is_constant:
                         conn = self._create_constant(
                                 wire.get_constant_signal().get(),
+                                wire.width,
                                 f'{node.component.name}:{pin.name}')
                         sources[wire.get_key()] = conn['ports'][0]['id']
                         box['children'].append(conn)
@@ -348,7 +357,7 @@ class VisualMixin:
             netwire = VisualMixin._generate_net_wiring(
                     self.wiring[port.get_key()],self.netmap)
             netwire['name'] = port.name
-            connector = self._create_connector(f'{self.name}:{port.name}',dir)
+            connector = self._create_connector(f'{self.name}:{port.name}',dir,port.width)
             connector['wire'] = netwire
             connectors.append(connector)
             connector_id = connector['ports'][0]['id']

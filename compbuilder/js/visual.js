@@ -11,9 +11,23 @@ var context = document.createElement('canvas').getContext('2d');
 
 var DEFAULT_FONT_SIZE = 16*0.8;
 var DEFAULT_FONT_FACE = "Arial";
-const DRAW_CONN_IN = "M 0,0 h 14 l 6,6 l -6,6 h -14 z";
-const DRAW_CONN_OUT = "M 20,0 h -14 l -6,6 l 6,6 h 14 z";
 
+//////////////////////////////////
+function padded_hex(num,bits) {
+  var digits = Math.ceil(bits/4);
+  var s = "000000000" + num.toString(16);
+  return s.substr(s.length-digits);
+}
+
+//////////////////////////////////
+function drawConnection(dir,w,h) {
+  if (dir == 'in')
+    return "M 0,0 h " + (w-6) + " l 6," + h/2 + " l -6," + h/2 + " h -" + (w-6) + " z";
+  else
+    return "M " + w + ",0 h -" + (w-6) + " l -6," + h/2 + " l 6," + h/2 + " h " + (w-6) + " z";
+}
+
+//////////////////////////////////
 function measureText(text,fontSize,fontFace) {
   var fontSize = fontSize || DEFAULT_FONT_SIZE;
   var fontFace = fontFace || DEFAULT_FONT_FACE;
@@ -65,11 +79,18 @@ function drawChildren(svg,node) {
       if (n.svg) { // use provided svg when available
         d3.select(this).html(n.svg);
       }
-      else if (n.type == "connector") {
+      else if (n.type == "connector") { // I/O connector
         d3.select(this)
           .append("path")
-          .attr("class","connector " + n.direction)
-          .attr("d", n.direction == "in" ? DRAW_CONN_IN : DRAW_CONN_OUT);
+            .attr("class","connector " + n.direction)
+            .attr("d", drawConnection(n.direction,n.width,n.height));
+        if (n.bits > 1) { // display signal's value for bus wires
+          d3.select(this)
+            .append("text")
+              .attr("class","signal")
+              .text("")
+              .attr("x",n.direction == "in" ? 4 : 10);
+        }
         n.node_id = "root"; // connectors are only attached to root node
       }
       else { // otherwise, just use a normal rectangle
@@ -180,14 +201,19 @@ function update(svg,component) {
     });
   svg.selectAll("rect.port")
     .classed("T", function(p) {
-      if (!(p.wire))
-        return false; // XXX constant wire should have 'wire' attached as well
+      if (!p.wire)
+        return false; // XXX should constant have 'wire' attached as well?
       else
         return component.nets[p.wire.net].signal;
     });
   svg.selectAll("path.connector")
     .classed("T", function(c) {
       return component.nets[c.wire.net].signal;
+    });
+  svg.selectAll("text.signal")
+    .text(function(c) {
+      var net = component.nets[c.wire.net];
+      return padded_hex(net.signal,net.width);
     });
 }
 
