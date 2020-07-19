@@ -130,30 +130,30 @@ class And8(VisualComponent):
 
 
 class DFF(VisualComponent):
-    IN = [w.d,w.clk]
-    OUT = [w.q]
+    IN = [w.In,w.clk]
+    OUT = [w.out]
 
     PARTS = []
     TRIGGER = [w.clk]
-    LATCH = [w.q]
+    LATCH = [w.out]
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._clk = Signal(0) 
-        self._q = Signal(0)
+        self._out = Signal(0)
         self.is_clocked_component = True
     
-    def process(self,d,clk):
+    def process(self,In,clk):
         if self._clk.get() == 0 and clk.get() == 1:
-            self._q = d
+            self._out = In
         self._clk = clk
-        return {'q':self._q}
+        return {'out':self._out}
     process.js = {
-        'q' : '''
+        'out' : '''
             function(w,s) { // wires,states
               if (s.clk == 0 && w.clk == 1)
-                s.q = w.d;
+                s.out = w.In;
               s.clk = w.clk;
-              return s.q;
+              return s.out;
             }''',
     }
