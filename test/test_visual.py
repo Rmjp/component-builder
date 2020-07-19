@@ -165,3 +165,36 @@ class TestFlatMultibitDFF(unittest.TestCase):
             mem.update(clk=F)
             self.assertNotEqual(mem.update(In=Signal(i,8))['out'],Signal(i,8))
             self.assertEqual(mem.update(clk=T)['out'],Signal(i,8))
+
+################################################
+class NotByConst(VisualComponent):
+    IN = [w.In]
+    OUT = [w.out]
+    PARTS = [
+        Nand(a=w.In, b=w.one, out=w.out),
+    ]
+
+class AndByConst(VisualComponent):
+    IN = [w.a, w.b]
+    OUT = [w.out]
+    PARTS = [
+        Nand(a=w.a, b=w.b, out=w.c),
+        Nand(a=w.c, b=w.one, out=w.out),
+    ]
+
+class TestFlatConstant(unittest.TestCase):
+    def setUp(self):
+        self.not1 = NotByConst()
+        self.and1 = AndByConst()
+        self.not1.flatten()
+        self.and1.flatten()
+
+    def test_sequence(self):
+        not1 = self.not1
+        and1 = self.and1
+        self.assertEqual(not1.update(In=F)['out'],T)
+        self.assertEqual(not1.update(In=T)['out'],F)
+        self.assertEqual(and1.update(a=F,b=F)['out'],F)
+        self.assertEqual(and1.update(a=F,b=T)['out'],F)
+        self.assertEqual(and1.update(a=T,b=F)['out'],F)
+        self.assertEqual(and1.update(a=T,b=T)['out'],T)

@@ -102,12 +102,16 @@ def _create_nets(self,outer,netlist,complist,path):
 
     if self.PARTS:
         # create a net for each of the internal wires
-        for key,edge in self.edges.items():
-            if key not in self.wiring: # internal wires
-                name,width = key
-                net = Net(f'{self.name}:{name}',width)
-                self.wiring[key] = (net,slice(0,width))
-                netlist.append(net)
+        for node in self.nodes.values():
+            for w in node.in_wires.values():
+                if w.get_key() not in self.wiring: # internal wires
+                    net_name = f'{self.name}:{w.name}'
+                    if w.is_constant:
+                        net = Net(net_name,w.width,signal=w.get_constant_signal())
+                    else:
+                        net = Net(net_name,w.width)
+                    self.wiring[w.get_key()] = (net,slice(0,w.width))
+                    netlist.append(net)
         # recusively assign nets for each of the internal components
         for inner in self.internal_components:
             inner_path = path+f'-{inner.node.id}'
@@ -137,8 +141,11 @@ def create_nets(self):
 ##############################################
 def topsort_nets(self):
     resolved = set()
-    # start with inputs and latches
-    unexplored = deque(self.wiring[w.get_key()][0] for w in self.IN)
+    unexplored = deque()
+
+    # start with inputs, constant wires, and latches
+    unexplored.extend(self.wiring[w.get_key()][0] for w in self.IN)
+    unexplored.extend(net for net in self.netlist if net.signal is not None)
     for p in self.primitives:
         for latch in p.LATCH:
             unexplored.append(p.wiring[latch.get_key()][0])
@@ -214,10 +221,11 @@ def flatten(self):
     self.topsort_nets()
     self.netlist.sort()
 
-    # instantiate net signals to zero and run update once to make their logic
-    # values consistent
+    # instantiate net signals to zero, except constant nets, and run update
+    # once to make their logic values consistent
     for net in self.netlist:
-        net.signal = Signal(0,net.width)
+        if net.signal is None:
+            net.signal = Signal(0,net.width)
     self.update()
 
 ##############################################

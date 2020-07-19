@@ -68,8 +68,8 @@ class VisualMixin:
         }]
 
     ################
-    def _create_port(self,wire,port_id,index,type):
-        side = {'in': 'WEST','out':'EAST'}[type]
+    def _create_port(self,wire,port_id,index,dir):
+        side = {'in': 'WEST','out':'EAST'}[dir]
         port = {
             'id': f'P{port_id}',
             'properties': {
@@ -85,7 +85,7 @@ class VisualMixin:
             label = wire.name
 
         if wire.width > 1:
-            label += f'[{wire.width-1}:{0}]'
+            label += f'[{0}..{wire.width-1}]'
 
         if label:
             port['labels'] = [{
@@ -101,13 +101,13 @@ class VisualMixin:
     def _create_connector(self,port_id,dir):
         port_side = {'in':'EAST','out':'WEST'}[dir]
         return {
-            'id' : f'C_{port_id}',
+            'id' : f'C:{port_id}',
             'type' : 'connector',
             'direction' : dir,
             'width' : self.config['connector_width'],
             'height' : self.config['connector_height'],
             'ports' : [{
-                'id': f'C{dir[0].upper()}_{port_id}',
+                'id': f'C{dir[0].upper()}:{port_id}',
                 'properties': {
                   'port.side': port_side,
                 },
@@ -172,9 +172,9 @@ class VisualMixin:
         elk_ports = []
         ports = [(w,'in') for w in self.IN[::-1]]
         ports += [(w,'out') for w in self.OUT]
-        for i,(wire,type) in enumerate(ports):
+        for i,(wire,dir) in enumerate(ports):
             port_id = f'{base_id}_{i}'
-            elk_port = self._create_port(wire,port_id,i,type)
+            elk_port = self._create_port(wire,port_id,i,dir)
             # attach wire's name to help styling
             netwire = VisualMixin._generate_net_wiring(self.wiring[wire.get_key()],netmap)
             netwire['name'] = wire.name
@@ -206,9 +206,15 @@ class VisualMixin:
 
             edges = []
 
-            # add incoming wires to all subcomponents
+            # add incoming wires to all subcomponents,
+            # except bus wires and constant wires
             for node in self.graph['nodes'].values():
                 for pin,wire in node.in_dict.items():
+                    wire_obj = node.in_wires[pin]
+                    if wire_obj.width > 1:  # skip bus wire
+                        continue
+                    if wire_obj.is_constant:
+                        continue
                     start = sources[wire]
                     end = dests[(node.id,pin)]
                     edge = self._create_edge(start,end)
@@ -219,7 +225,10 @@ class VisualMixin:
                     edges.append(edge)
 
             # output to outer ports are not yet wired; take care of them
+            # also skip bus wires
             for pin in self.OUT:
+                if pin.width > 1:
+                    continue
                 wire = pin.get_key()
                 start = sources[wire]
                 end = dests[(None,wire)]
@@ -301,7 +310,7 @@ class VisualMixin:
             netwire = VisualMixin._generate_net_wiring(
                     self.wiring[port.get_key()],self.netmap)
             netwire['name'] = port.name
-            connector = self._create_connector(i,dir)
+            connector = self._create_connector(f'{self.name}:{port.name}',dir)
             connector['wire'] = netwire
             connectors.append(connector)
             connector_id = connector['ports'][0]['id']
