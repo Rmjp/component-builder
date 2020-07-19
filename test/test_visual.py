@@ -39,6 +39,8 @@ class TestPrimitiveDFF(unittest.TestCase):
         self.assertEqual(dff.update(In=T)['out'], F)
         self.assertEqual(dff.update(clk=F)['out'], F) # ignore falling edge
         self.assertEqual(dff.update(clk=T)['out'], T) # triggered by rising edge
+        dff.update(In=F)
+        self.assertEqual(dff.update(clk=T)['out'], T) # must not change
 
 ################################################
 class TestFlatComponent(unittest.TestCase):
@@ -107,7 +109,7 @@ class TestFlatLoopedComponent(unittest.TestCase):
 
     def test_sequence(self):
         div2 = self.div2
-        # the latch should be zero initially
+        # the latch and clock pin should be zero initially
         self.assertEqual(div2.update()['out'],F)
         self.assertEqual(div2.update(clk=F)['out'],F)
         self.assertEqual(div2.update(clk=T)['out'],T)
@@ -119,7 +121,7 @@ class TestFlatLoopedComponent(unittest.TestCase):
         self.assertEqual(div2.update(clk=T)['out'],F)
 
         div4 = self.div4
-        # both latchs should be zero initially
+        # both latchs and clock pin should be zero initially
         self.assertEqual(div4.update()['out'],F)
         self.assertEqual(div4.update(clk=T)['out'],F)
         self.assertEqual(div4.update(clk=F)['out'],F)
@@ -132,3 +134,34 @@ class TestFlatLoopedComponent(unittest.TestCase):
             self.assertEqual(div4.update(clk=F)['out'],F)
             self.assertEqual(div4.update(clk=T)['out'],F)
             self.assertEqual(div4.update(clk=F)['out'],F)
+
+################################################
+class Mem8(VisualComponent):
+    IN = [w(8).In, w.clk]
+    OUT = [w(8).out]
+    PARTS = [
+        DFF(In=w.In[0],out=w.out[0],clk=w.clk),
+        DFF(In=w.In[1],out=w.out[1],clk=w.clk),
+        DFF(In=w.In[2],out=w.out[2],clk=w.clk),
+        DFF(In=w.In[3],out=w.out[3],clk=w.clk),
+        DFF(In=w.In[4],out=w.out[4],clk=w.clk),
+        DFF(In=w.In[5],out=w.out[5],clk=w.clk),
+        DFF(In=w.In[6],out=w.out[6],clk=w.clk),
+        DFF(In=w.In[7],out=w.out[7],clk=w.clk),
+    ]
+
+class TestFlatMultibitDFF(unittest.TestCase):
+    def setUp(self):
+        self.mem = Mem8()
+        self.mem.flatten()
+
+    def test_sequence(self):
+        mem = self.mem
+        mem.update(In=Signal(0xFF,8),clk=F)
+        # all DFFs should be zero initially
+        self.assertEqual(mem.update()['out'],Signal(0x00,8))
+        self.assertEqual(mem.update(clk=T)['out'],Signal(0xFF,8))
+        for i in range(256):
+            mem.update(clk=F)
+            self.assertNotEqual(mem.update(In=Signal(i,8))['out'],Signal(i,8))
+            self.assertEqual(mem.update(clk=T)['out'],Signal(i,8))
