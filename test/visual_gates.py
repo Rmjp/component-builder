@@ -1,33 +1,23 @@
 from compbuilder import Component, Signal
 from compbuilder import w
 from compbuilder.visual import VisualMixin
+from compbuilder.visual_layouts import (
+    NandLayoutMixin,
+    NotLayoutMixin,
+    AndLayoutMixin,
+    OrLayoutMixin,
+    XorLayoutMixin,
+)
 
-class Nand(VisualMixin,Component):
+class VisualComponent(VisualMixin, Component):
+    pass
+
+
+class Nand(NandLayoutMixin,VisualComponent):
     IN = [w.a, w.b]
     OUT = [w.out]
 
     PARTS = []
-
-    LAYOUT_CONFIG = {
-        'width' : 48,
-        'height' : 40,
-        'port_width' : 0,
-        'port_height' : 16,
-        #'label' : '',
-        'ports' : {  # hide all port labels
-            'a' : {'label' : ''},
-            'b' : {'label' : ''},
-            'out' : {'label' : ''},
-        },
-        'svg' : """
-            <path d="M 0,0
-                     h 20
-                     a 20,20,180,1,1,0,40
-                     h -20
-                     z" />
-            <circle cx="44" cy="20" r="4"/>
-        """,
-    }
 
     def process(self, a, b):
         if (a.get()==1) and (b.get()==1):
@@ -39,140 +29,50 @@ class Nand(VisualMixin,Component):
     }
 
 
-class Not(VisualMixin,Component):
-    IN = [w.a]
+class Not(NotLayoutMixin,VisualComponent):
+    IN = [w.In]
     OUT = [w.out]
 
     PARTS = [
-        Nand(a=w.a, b=w.a, out=w.out),
+        Nand(a=w.In, b=w.In, out=w.out),
     ]
 
-    LAYOUT_CONFIG = {
-        'width' : 38,
-        'height' : 40,
-        'port_width' : 0,
-        'port_height' : 0,
-        'label' : '',
-        'ports' : {  # hide all port labels
-            'a' : {'label' : ''},
-            'out' : {'label' : ''},
-        },
-        'svg' : """
-            <path d="M 0,0
-                     l 30,20
-                     l -30,20
-                     z" />
-            <circle cx="34" cy="20" r="4"/>
-        """,
-    }
 
-
-class And(VisualMixin,Component):
+class And(AndLayoutMixin,VisualComponent):
     IN = [w.a, w.b]
     OUT = [w.out]
 
     PARTS = [
         Nand(a=w.a, b=w.b, out=w.c),
-        Not(a=w.c, out=w.out),
+        Not(In=w.c, out=w.out),
     ]
 
-    LAYOUT_CONFIG = {
-        'width' : 40,
-        'height' : 40,
-        'port_width' : 0,
-        'port_height' : 16,
-        'label' : '',
-        'ports' : {  # hide all port labels
-            'a' : {'label' : ''},
-            'b' : {'label' : ''},
-            'out' : {'label' : ''},
-        },
-        'svg' : """
-            <path d="M 0,0
-                     h 20
-                     a 20,20,180,1,1,0,40
-                     h -20
-                     z" />
-        """,
-    }
 
-
-class Or(VisualMixin,Component):
+class Or(OrLayoutMixin,VisualComponent):
     IN = [w.a, w.b]
     OUT = [w.out]
 
     PARTS = [
-        Not(a=w.a, out=w.na),
-        Not(a=w.b, out=w.nb),
+        Not(In=w.a, out=w.na),
+        Not(In=w.b, out=w.nb),
         Nand(a=w.na, b=w.nb, out=w.out),
     ]
 
-    LAYOUT_CONFIG = {
-        'width' : 40,
-        'height' : 40,
-        'port_width' : 0,
-        'port_height' : 16,
-        'label' : '',
-        'ports' : {  # hide all port labels
-            'a' : {'label' : ''},
-            'b' : {'label' : ''},
-            'out' : {'label' : ''},
-        },
-        'svg' : """
-            <path d="M 0,0
-                     h 5
-                     q 25,0,35,20
-                     q -10,20,-35,20
-                     h -5
-                     Q 10,20,0,0
-                     z
-                     M 0,10.5 h 4
-                     M 0,29.5 h 4
-                     " />
-        """,
-    }
 
-
-class Xor(VisualMixin,Component):
+class Xor(XorLayoutMixin,VisualComponent):
     IN = [w.a, w.b]
     OUT = [w.out]
 
     PARTS = [
-        Not(a=w.a, out=w.na),
-        Not(a=w.b, out=w.nb),
+        Not(In=w.a, out=w.na),
+        Not(In=w.b, out=w.nb),
         And(a=w.a, b=w.nb, out=w.and1),
         And(a=w.b, b=w.na, out=w.and2),
         Or(a=w.and1, b=w.and2, out=w.out),
     ]
 
-    LAYOUT_CONFIG = {
-        'width' : 45,
-        'height' : 40,
-        'port_width' : 0,
-        'port_height' : 16,
-        'label' : '',
-        'ports' : {  # hide all port labels
-            'a' : {'label' : ''},
-            'b' : {'label' : ''},
-            'out' : {'label' : ''},
-        },
-        'svg' : """
-            <path d="M 5,0
-                     h 5
-                     q 25,0,35,20
-                     q -10,20,-35,20
-                     h -5
-                     q 10,-20,0,-40
-                     z
-                     M 0,40" />
-            <path d="M 0,0
-                     q 10,20,0,40
-                     M 0,10.5 h 4
-                     M 0,29.5 h 4" style="fill:none"/>
-        """,
-    }
 
-class HalfAdder(VisualMixin,Component):
+class HalfAdder(VisualComponent):
     IN = [w.a, w.b]
     OUT = [w.s, w.carry]
 
@@ -182,7 +82,7 @@ class HalfAdder(VisualMixin,Component):
     ]
     
 
-class FullAdder(VisualMixin,Component):
+class FullAdder(VisualComponent):
     IN = [w.a, w.b, w.carry_in]
     OUT = [w.s, w.carry_out]
 
@@ -201,7 +101,7 @@ class FullAdder(VisualMixin,Component):
     ]
 
 
-class And2(VisualMixin,Component):
+class And2(VisualComponent):
     IN = [w(2).a, w(2).b]
     OUT = [w(2).out]
 
@@ -213,7 +113,7 @@ class And2(VisualMixin,Component):
     ]
 
 
-class And8(VisualMixin,Component):
+class And8(VisualComponent):
     IN = [w(8).a, w(8).b]
     OUT = [w(8).out]
 
@@ -229,7 +129,7 @@ class And8(VisualMixin,Component):
                                   out=w(8).out[i]))
 
 
-class DFF(VisualMixin,Component):
+class DFF(VisualComponent):
     IN = [w.d,w.clk]
     OUT = [w.q]
 
