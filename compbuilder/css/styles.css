@@ -12,6 +12,10 @@ rect.port.T {
   fill: lightgreen;
 }
 
+rect.constant {
+  fill: #cccccc;
+}
+
 path.connector {
   fill: white;
 }
@@ -36,6 +40,12 @@ path.edge.T {
 
 text.label {
   font-family: Arial;
+  font-size: 80%;
+}
+
+text.constant {
+  font-family: monospace;
+  font-weight: bold;
   font-size: 80%;
 }
 

@@ -9,6 +9,7 @@ DEFAULT_LAYOUT_CONFIG = {
     'port_spacing' : 20,
     'label_width' : 50,
     'label_height' : 10,
+    'const_height' : 8,
     'port_width' : 8,
     'port_height' : 8,
     'connector_width' : 20,
@@ -71,7 +72,7 @@ class VisualMixin:
     def _create_port(self,wire,port_id,index,dir):
         side = {'in': 'WEST','out':'EAST'}[dir]
         port = {
-            'id': f'P{port_id}',
+            'id': f'P:{port_id}',
             'properties': {
               'port.side': side,
               'port.index': index,
@@ -122,6 +123,36 @@ class VisualMixin:
         }
 
     ################
+    def _create_constant(self,value,port_id):
+        label = str(value)
+        width = 6*len(label)
+        height = self.config['const_height']
+
+        return {
+            'id' : f'CNST_N:{port_id}',
+            'width' : width + 10,
+            'height' : height + 4,
+            'type' : 'constant',
+            'labels' : [{
+                'text': str(label),
+                'id': f'CNST_L:{port_id}',
+                'width': width,
+                'height': height,
+            }],
+            'ports' : [{
+                'id': f'CNST_P:{port_id}',
+                'properties': {
+                  'port.side': 'EAST',
+                },
+                'width': 0,
+                'height': 0,
+            }],
+            'properties': {
+                'portConstraints': 'FIXED_ORDER',
+                'nodeLabels.placement': '[H_CENTER, V_CENTER, INSIDE]'
+            },
+        }
+    ################
     def _create_edge(self,src,dst):
         return { 'sources' : [src], "targets" : [dst] }
 
@@ -146,7 +177,7 @@ class VisualMixin:
             box = self._create_body(self.name)
         else:
             children = []
-            for i,node in self.graph['nodes'].items():
+            for i,node in self.nodes.items():
                 subcomp_id = f'{base_id}_{i}'
                 subcomp,inner_port_map[i] = node.component._generate_elk(depth-1,netmap,subcomp_id)
                 subcomp['node_id'] = node.id
@@ -158,10 +189,11 @@ class VisualMixin:
                 'children' : children,
                 }
 
-        # positions of signals' sources (wire -> port-id)
+        # map a wire to its source port object (wire -> port-id)
         sources = {}  
 
-        # positions of signals' destinations ((node-id,wire) -> port-id)
+        # map a wire to one of its destination at node-id to port object
+        # ((node-id,wire) -> port-id)
         # node-id is None in case of wire ending up at an external port
         dests = {}
 
@@ -173,7 +205,8 @@ class VisualMixin:
         ports = [(w,'in') for w in self.IN[::-1]]
         ports += [(w,'out') for w in self.OUT]
         for i,(wire,dir) in enumerate(ports):
-            port_id = f'{base_id}_{i}'
+            #port_id = f'{base_id}_{i}'
+            port_id = f'{self.name}:{wire.name}'
             elk_port = self._create_port(wire,port_id,i,dir)
             # attach wire's name to help styling
             netwire = VisualMixin._generate_net_wiring(self.wiring[wire.get_key()],netmap)
@@ -195,10 +228,17 @@ class VisualMixin:
                 dests[(None,pin.get_key())] = port_map[pin.get_key()]
 
             # collect internal pin IDs
-            for node in self.graph['nodes'].values():
+            for node in self.nodes.values():
                 for pin in node.component.IN:
                     wire = node.component.get_actual_wire(pin.name)
                     dests[(node.id,pin.get_key())] = inner_port_map[node.id][pin.get_key()]
+                    # if this wire is a constant, also add a source connector for it
+                    if wire.is_constant:
+                        conn = self._create_constant(
+                                wire.get_constant_signal().get(),
+                                f'{node.component.name}:{pin.name}')
+                        sources[wire.get_key()] = conn['ports'][0]['id']
+                        box['children'].append(conn)
 
                 for pin in node.component.OUT:
                     wire = node.component.get_actual_wire(pin.name)
@@ -208,12 +248,10 @@ class VisualMixin:
 
             # add incoming wires to all subcomponents,
             # except bus wires and constant wires
-            for node in self.graph['nodes'].values():
+            for node in self.nodes.values():
                 for pin,wire in node.in_dict.items():
                     wire_obj = node.in_wires[pin]
                     if wire_obj.width > 1:  # skip bus wire
-                        continue
-                    if wire_obj.is_constant:
                         continue
                     start = sources[wire]
                     end = dests[(node.id,pin)]

@@ -103,7 +103,7 @@ def _create_nets(self,outer,netlist,complist,path):
     if self.PARTS:
         # create a net for each of the internal wires
         for node in self.nodes.values():
-            for w in node.in_wires.values():
+            for w in [*node.in_wires.values(),*node.out_wires.values()]:
                 if w.get_key() not in self.wiring: # internal wires
                     net_name = f'{self.name}:{w.name}'
                     if w.is_constant:

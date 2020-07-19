@@ -75,7 +75,12 @@ function drawChildren(svg,node) {
       else { // otherwise, just use a normal rectangle
         d3.select(this)
           .append("rect")
-          .attr("class","node")
+          .attr("class", function(n) {
+            if (n.type)
+              return "node " + n.type;
+            else
+              return "node";
+          })
           .attr("width", function(n) { return n.width; })
           .attr("height", function(n) { return n.height; });
       }
@@ -112,11 +117,12 @@ function drawChildren(svg,node) {
     .each(function(n) {  // draw node labels
       if (n.labels) {
         var labelGroup = svg.append("g");
+        var nodeType = n.type ? n.type : "";
         labelGroup.selectAll("text.label")
           .data(n.labels, function(lbl) { return lbl.id; })
         .enter()
           .append("text")
-          .attr("class","label")
+          .attr("class", "label " + nodeType)
           .attr("x", function(lbl) { return lbl.x; })
           .attr("y", function(lbl) { return lbl.y + lbl.height; })
           .text(function(lbl) { return lbl.text; });
@@ -174,7 +180,10 @@ function update(svg,component) {
     });
   svg.selectAll("rect.port")
     .classed("T", function(p) {
-      return component.nets[p.wire.net].signal;
+      if (!(p.wire))
+        return false; // XXX constant wire should have 'wire' attached as well
+      else
+        return component.nets[p.wire.net].signal;
     });
   svg.selectAll("path.connector")
     .classed("T", function(c) {
