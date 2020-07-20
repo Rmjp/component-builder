@@ -29,54 +29,6 @@ var Component = function(comp_config) {
 };
 
 ///////////////////////////////////////////////////
-Component.SIGPAT = /^([A-Za-z_]\w*)?(\[(\d+)(:(\d+))?\])?$/;
-Component.parse_signal = function(signal) {
-  // > Component.parse_signal('w')
-  // { name: 'w', start: 0, end: 0 }
-  // > Component.parse_signal('w[8:3]')
-  // { name: 'w', start: 8, end: 3 }
-  // > Component.parse_signal('output[0]')
-  // { name: 'output', start: 0, end: 0 }
-  // > Component.parse_signal('output[1]')
-  // { name: 'output', start: 1, end: 1 }
-  // > Component.parse_signal('[8:3]')
-  // {name: undefined, start: 8, end: 3}
-  var m = Component.SIGPAT.exec(signal);
-  var name = m[1];
-  var start = m[3];
-  var end = m[5];
-  if (start)
-    end = end || start;
-  else {
-    start = 0;
-    end = 0;
-  }
-  return {name:name, start:parseInt(start), end:parseInt(end)};
-};
-
-///////////////////////////////////////////////////
-Component.prototype.set_signal = function(signal,value) {
-  var sig = Component.parse_signal(signal);
-  var mask = (1 << (sig.start-sig.end+1)) - 1;
-  value = (value & mask) << sig.end;
-  var newval = this.nets[sig.name] || 0;
-  // enforce unsigned with >>> operator
-  this.nets[sig.name] = ((newval & ~(mask << sig.end)) | value) >>> 0;
-  return this;
-};
-
-///////////////////////////////////////////////////
-Component.prototype.get_signal = function(signal) {
-  var sig = Component.parse_signal(signal);
-  var value = this.nets[sig.name];
-  if (value == undefined)
-    throw "Undefined signal value";
-  var mask = (1 << (sig.start-sig.end+1)) - 1;
-  // enforce unsigned with >>> operator
-  return ((value >> sig.end) & mask) >>> 0;
-};
-
-///////////////////////////////////////////////////
 Component.prototype.set_net_signal = function(net,slice,value) {
   var slice = slice || [0,0];
   var mask = (1 << (slice[0]-slice[1]+1)) - 1;
