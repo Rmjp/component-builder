@@ -1,3 +1,26 @@
+class NandLayoutMixin:
+    LAYOUT_CONFIG = {
+        'width' : 48,
+        'height' : 40,
+        'port_width' : 0,
+        'port_height' : 16,
+        #'label' : '',
+        'ports' : {  # hide all port labels
+            'a' : {'label' : ''},
+            'b' : {'label' : ''},
+            'out' : {'label' : ''},
+        },
+        'svg' : """
+            <path d="M 0,0
+                     h 20
+                     a 20,20,180,1,1,0,40
+                     h -20
+                     z" />
+            <circle cx="44" cy="20" r="4"/>
+        """,
+    }
+
+
 class NotLayoutMixin:
     LAYOUT_CONFIG = {
         'width' : 38,

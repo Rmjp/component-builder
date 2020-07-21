@@ -620,10 +620,11 @@ class WireFactory:
     __instances = None
 
     CONSTANT_FUNCTIONS = {
-        'T': lambda width: 1,
+        'T': lambda width: (1 << width) - 1,
         'F': lambda width: 0,
         'one': lambda width: (1 << width) - 1,
         'zero': lambda width: 0,
+        'int_one': lambda width: 1,
     }
     
     @staticmethod

@@ -1,4 +1,5 @@
 import re
+import math
 from copy import deepcopy
 from textwrap import indent,dedent
 import json
@@ -31,6 +32,73 @@ PRIMITIVE_GATE_JS_TEMPLATE = indent(dedent('''
   }}'''),'  ')
 
 PROCESS_JS_TEMPLATE = ' '*4 + '"{pin}" : {function},'
+
+################################
+def _generate_net_wiring(net_wiring,netmap):
+    net,nslice = net_wiring
+    start,stop,_ = nslice.indices(net.width)
+    return {
+        'net' : netmap[net],
+        'slice' : [stop-1,start],
+    }
+
+################################
+def _generate_wiring(comp,netmap):
+    wiring = {}
+    for w in comp.IN + comp.OUT:
+        wiring[w.name] = _generate_net_wiring(
+                comp.wiring[w.get_key()],netmap)
+    return wiring
+
+################################
+def get_wire_name(wire):
+    '''
+    Generate a string representing a signal from the specified wire with
+    proper slicing notation
+    >>> get_wire_name(w.a)
+    'a'
+    >>> get_wire_name(w(8).a)
+    'a[0..7]'
+    >>> get_wire_name(w(8).a[2])
+    'a[2]'
+    >>> get_wire_name(w(8).a[2:3])
+    'a[2]'
+    >>> get_wire_name(w(8).a[1:5])
+    'a[1..4]'
+    '''
+    if wire.slice:
+        start,stop,_ = wire.slice.indices(wire.width)
+    else:
+        start = 0
+        stop = wire.width
+    if wire.width == 1:
+        return wire.name
+    elif start+1 == stop:
+        return f'{wire.name}[{start}]'
+    else:
+        return f'{wire.name}[{start}..{stop-1}]'
+        
+################################
+def get_wire_slice(wire):
+    '''
+    Generate a tuple containing the specified wire's name and its slice
+    information
+    >>> get_wire_slice(w.a)
+    (0, 1)
+    >>> get_wire_slice(w(8).a)
+    (0, 8)
+    >>> get_wire_slice(w(8).a[2])
+    (2, 3)
+    >>> get_wire_slice(w(8).a[2:3])
+    (2, 3)
+    >>> get_wire_slice(w(8).a[1:5])
+    (1, 5)
+    '''
+    if wire.slice is None:
+        start,stop = 0,wire.width
+    else:
+        start,stop,_ = wire.slice.indices(wire.width)
+    return (start,stop)
 
 ################################
 class VisualMixin:
@@ -68,10 +136,10 @@ class VisualMixin:
         }]
 
     ################
-    def _create_port(self,wire,port_id,index,type):
-        side = {'in': 'WEST','out':'EAST'}[type]
+    def _create_port(self,wire,port_id,index,dir):
+        side = {'in': 'WEST','out':'EAST'}[dir]
         port = {
-            'id': f'P{port_id}',
+            'id': f'P:{port_id}',
             'properties': {
               'port.side': side,
               'port.index': index,
@@ -85,7 +153,7 @@ class VisualMixin:
             label = wire.name
 
         if wire.width > 1:
-            label += f'[{wire.width-1}:{0}]'
+            label += f'[{0}..{wire.width-1}]'
 
         if label:
             port['labels'] = [{
@@ -98,16 +166,21 @@ class VisualMixin:
         return port
 
     ################
-    def _create_connector(self,port_id,dir):
+    def _create_connector(self,dir,port_id,text='',type='connector'):
         port_side = {'in':'EAST','out':'WEST'}[dir]
-        return {
-            'id' : f'C_{port_id}',
-            'type' : 'connector',
+        if text:
+            width = int(6*len(text)) + 16  # XXX magic
+        else:
+            width = self.config['connector_width']
+        height = self.config['connector_height']
+        obj = {
+            'id' : f'C:{port_id}',
+            'type' : type,
             'direction' : dir,
-            'width' : self.config['connector_width'],
-            'height' : self.config['connector_height'],
+            'width' : width,
+            'height' : height,
             'ports' : [{
-                'id': f'C{dir[0].upper()}_{port_id}',
+                'id': f'CP:{port_id}',
                 'properties': {
                   'port.side': port_side,
                 },
@@ -117,9 +190,17 @@ class VisualMixin:
             }],
             'properties': {
                 'portConstraints': 'FIXED_ORDER',
-                'nodeLabels.placement': '[H_CENTER, V_TOP, OUTSIDE]'
+                'nodeLabels.placement': '[H_CENTER, V_CENTER, INSIDE]'
             },
         }
+        if text:
+            obj['labels'] = [{
+                'text': text,
+                'id': f'CL:{port_id}',
+                'width': width,
+                'height': height,
+            }]
+        return obj
 
     ################
     def _create_edge(self,src,dst):
@@ -133,7 +214,7 @@ class VisualMixin:
         if (not self.PARTS or depth == 0) and hasattr(self,"LAYOUT_CONFIG"):
             self.config.update(self.LAYOUT_CONFIG)
 
-        # port_map maintain mapping of (node-id,wire) -> (ELK port-id)
+        # port_map maintain mapping of (node-id,wire,slice) -> (ELK port-id)
         inner_port_map = {}
         if depth == 0 or not self.PARTS: # just create an IC box
             if 'height' not in self.config:
@@ -146,7 +227,7 @@ class VisualMixin:
             box = self._create_body(self.name)
         else:
             children = []
-            for i,node in self.graph['nodes'].items():
+            for i,node in self.nodes.items():
                 subcomp_id = f'{base_id}_{i}'
                 subcomp,inner_port_map[i] = node.component._generate_elk(depth-1,netmap,subcomp_id)
                 subcomp['node_id'] = node.id
@@ -158,77 +239,92 @@ class VisualMixin:
                 'children' : children,
                 }
 
-        # positions of signals' sources (wire -> port-id)
-        sources = {}  
-
-        # positions of signals' destinations ((node-id,wire) -> port-id)
-        # node-id is None in case of wire ending up at an external port
-        dests = {}
-
         # add input and output ports to the left and right sides of the
         # component box, respectively;
         # also maintain port_map to be exposed to the outer component
-        port_map = {}
+        port_map = {}  # map (component's pin) -> (ELK port-id)
         elk_ports = []
         ports = [(w,'in') for w in self.IN[::-1]]
         ports += [(w,'out') for w in self.OUT]
-        for i,(wire,type) in enumerate(ports):
-            port_id = f'{base_id}_{i}'
-            elk_port = self._create_port(wire,port_id,i,type)
-            # attach wire's name to help styling
-            netwire = VisualMixin._generate_net_wiring(self.wiring[wire.get_key()],netmap)
-            netwire['name'] = wire.name
+        for i,(pin,dir) in enumerate(ports):
+            port_id = f'{self.name}:{pin.name}'
+            elk_port = self._create_port(pin,port_id,i,dir)
+            # attach wire's net to help styling
+            netwire = _generate_net_wiring(self.wiring[pin.get_key()],netmap)
+            netwire['name'] = pin.name
             elk_port['wire'] = netwire
             elk_ports.append(elk_port)
-            port_map[wire.get_key()] = elk_port['id']
+            port_map[pin.get_key()] = elk_port['id']
         box['ports'] = elk_ports
 
         # when internal components are shown, also add edges to represent
-        # inner wiring
+        # internal wiring
         if depth > 0 and self.PARTS:
-            # collect input pin IDs
+            # maintain a data structure that allows inquiries of an internal
+            # wire's source and destination ELK ports by its name and slicing
+            # wires: wire -> (net,[source...],[dest...])
+            # where each source and dest is of the form (ELK-port-id,slice)
+            wires = {}
             for pin in self.IN:
-                sources[pin.get_key()] = port_map[pin.get_key()]
-
-            # collect output pin IDs
+                _,sources,_ = wires.setdefault(pin.get_key(), 
+                                (self.wiring[pin.get_key()],[],[]))
+                entry = port_map[pin.get_key()], get_wire_slice(pin)
+                sources.append(entry)
             for pin in self.OUT:
-                dests[(None,pin.get_key())] = port_map[pin.get_key()]
+                _,_,dests = wires.setdefault(pin.get_key(),
+                              (self.wiring[pin.get_key()],[],[]))
+                entry = port_map[pin.get_key()], get_wire_slice(pin)
+                dests.append(entry)
+            for nid,node in self.nodes.items():
+                comp = node.component
+                for pin in comp.IN:
+                    wire = comp.get_actual_wire(pin.name)
+                    _,sources,dests = wires.setdefault(wire.get_key(),
+                                        (comp.wiring[pin.get_key()],[],[]))
+                    entry = inner_port_map[nid][pin.get_key()], get_wire_slice(wire)
+                    dests.append(entry)
+                    if wire.is_constant:
+                        # constant wire; create a source connector for it
+                        netwire = _generate_net_wiring(
+                                comp.wiring[pin.get_key()],
+                                netmap)
+                        digits = math.ceil(wire.width/4)
+                        connector = self._create_connector(
+                                'in',
+                                f'{node.component.name}:{pin.name}',
+                                f'{wire.get_constant_signal().get():{digits}X}',
+                                type='constant')
+                        connector['wire'] = netwire
+                        entry = connector['ports'][0]['id'], get_wire_slice(wire)
+                        sources.append(entry)
+                        box['children'].append(connector)
+                for pin in comp.OUT:
+                    wire = comp.get_actual_wire(pin.name)
+                    _,sources,_ = wires.setdefault(wire.get_key(),
+                                    (comp.wiring[pin.get_key()],[],[]))
+                    entry = inner_port_map[nid][pin.get_key()], get_wire_slice(wire)
+                    sources.append(entry)
+            #for w in wires:
+            #    print(w)
+            #    sources,dests = wires[w]
+            #    print(' src:', sources)
+            #    print(' dst:', dests)
 
-            # collect internal pin IDs
-            for node in self.graph['nodes'].values():
-                for pin in node.component.IN:
-                    wire = node.component.get_actual_wire(pin.name)
-                    dests[(node.id,pin.get_key())] = inner_port_map[node.id][pin.get_key()]
-
-                for pin in node.component.OUT:
-                    wire = node.component.get_actual_wire(pin.name)
-                    sources[wire.get_key()] = inner_port_map[node.id][pin.get_key()]
-
+            # define edges from all the wire connections generated above
             edges = []
+            for w,(net,sources,dests) in wires.items():
+                # create an edge between source/dest with overlapping slices
+                pairs = [(sport,dport) 
+                           for sport,(sstart,sstop) in sources
+                           for dport,(dstart,dstop) in dests
+                           if sstart < dstop and dstart < sstop]
 
-            # add incoming wires to all subcomponents
-            for node in self.graph['nodes'].values():
-                for pin,wire in node.in_dict.items():
-                    start = sources[wire]
-                    end = dests[(node.id,pin)]
-                    edge = self._create_edge(start,end)
-                    # attach wire's name to help styling
-                    netwire = VisualMixin._generate_net_wiring(node.component.wiring[pin],netmap)
-                    netwire['name'] = node.in_wires[pin].name
+                for s,d in pairs:
+                    edge = self._create_edge(s,d)
+                    # attach wire's net to help styling
+                    netwire = _generate_net_wiring(net,netmap)
                     edge['wire'] = netwire
                     edges.append(edge)
-
-            # output to outer ports are not yet wired; take care of them
-            for pin in self.OUT:
-                wire = pin.get_key()
-                start = sources[wire]
-                end = dests[(None,wire)]
-                edge = self._create_edge(start,end)
-                # attach wire's name to help styling
-                netwire = VisualMixin._generate_net_wiring(self.wiring[pin.get_key()],netmap)
-                netwire['name'] = pin.name
-                edge['wire'] = netwire
-                edges.append(edge)
 
             # enumerate all edges and give them proper IDs
             for i,edge in enumerate(edges):
@@ -298,16 +394,20 @@ class VisualMixin:
         ports = [(p,'in') for p in self.IN[::-1]]
         ports += [(p,'out') for p in self.OUT]
         for i,(port,dir) in enumerate(ports):
-            netwire = VisualMixin._generate_net_wiring(
+            netwire = _generate_net_wiring(
                     self.wiring[port.get_key()],self.netmap)
             netwire['name'] = port.name
-            connector = self._create_connector(i,dir)
+            if port.width > 1:  # generate placeholder for signal's value
+                value = '0'*math.ceil(port.width/4)
+            else:
+                value = ''
+            connector = self._create_connector(dir,f'{self.name}:{port.name}',value)
             connector['wire'] = netwire
             connectors.append(connector)
             connector_id = connector['ports'][0]['id']
             port_id = port_map[port.get_key()]
             conlink = self._create_edge(connector_id,port_id)
-            conlink['id'] = f'CE_{i}'
+            conlink['id'] = f'CE:{i}'
             conlink['wire'] = netwire
             conlinks.append(conlink)
 
@@ -327,30 +427,6 @@ class VisualMixin:
             self._generate_node_map(c,node_map,part_expr)
 
     ################
-    @staticmethod
-    def _generate_net_wiring(net_wiring,netmap):
-        net,nslice = net_wiring
-        start,stop,_ = nslice.indices(net.width)
-        if (start,stop) == (0,1): # single wire; omit slicing
-            return {
-                'net' : netmap[net],
-            }
-        else:
-            return {
-                'net' : netmap[net],
-                'slice' : [stop-1,start],
-            }
-
-    ################
-    @staticmethod
-    def _generate_wiring(comp,netmap):
-        wiring = {}
-        for w in comp.IN + comp.OUT:
-            wiring[w.name] = VisualMixin._generate_net_wiring(
-                    comp.wiring[w.get_key()],netmap)
-        return wiring
-
-    ################
     def _generate_component_config(self):
         # create component->index mappings
         # component list consists of the main component itself, and all its
@@ -367,7 +443,7 @@ class VisualMixin:
         # generate primitive component wiring 
         parts = []
         for comp in [self] + self.primitives:
-            wiring = VisualMixin._generate_wiring(comp,self.netmap)
+            wiring = _generate_wiring(comp,self.netmap)
             parts.append({
                 'name': comp.name,
                 'config': comp.get_gate_name(),
@@ -396,7 +472,7 @@ class VisualMixin:
                 'width' : net.width,
                 'signal' : net.signal.get(),
                 'sources' : sources,
-                'wiring' : VisualMixin._generate_wiring(comp,self.netmap),
+                'wiring' : _generate_wiring(comp,self.netmap),
             })
 
         # combine all configs

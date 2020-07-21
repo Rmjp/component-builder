@@ -12,6 +12,10 @@ rect.port.T {
   fill: lightgreen;
 }
 
+rect.constant {
+  fill: #ffffff;
+}
+
 path.connector {
   fill: white;
 }
@@ -24,6 +28,10 @@ path.connector.hover {
   stroke-width: 3px;
 }
 
+path.constant {
+  fill: #dddddd;
+}
+
 path.edge {
   stroke-width: 1px;
   stroke: #888888;
@@ -34,8 +42,28 @@ path.edge.T {
   stroke: green;
 }
 
+path.edge.hover {
+  stroke-width: 5px;
+  stroke: orange;
+}
+
+path.bus {
+  stroke: black;
+}
+
 text.label {
   font-family: Arial;
   font-size: 80%;
 }
 
+text.label.connector {
+  font-family: monospace;
+  font-weight: bold;
+  font-size: 80%;
+}
+
+text.label.constant {
+  font-family: monospace;
+  font-weight: bold;
+  font-size: 80%;
+}
