@@ -79,7 +79,121 @@ class Signal:
 Signal.F = Signal(0)
 Signal.T = Signal(1)
 
-class Component:
+class SimulationMixin:
+    def extract_nets(self):
+        self.initialize()
+        
+        base_components = []
+
+        ccount = [0]
+        
+        def assign_component_cid(component):
+            ccount[0] += 1
+            component.cid = ccount[0]
+            print(component.cid, component)
+
+            for c in component.internal_components:
+                assign_component_cid(c)
+        
+        def extract_base_components(component):
+            if component.internal_components == []:
+                base_components.append(component)
+            else:
+                for c in component.internal_components:
+                    extract_base_components(c)
+
+        assign_component_cid(self)
+        extract_base_components(self)
+        return base_components
+
+    def trace_wire(self):
+        wire_map = {}
+        terminated = {}
+        for w in self.IN:
+            wire_map[w.get_key()] = [{'cid':self.cid, 'key':w.get_key(), 'offset':0}]
+            terminated[w.get_key()] = False
+
+        for w in self.OUT:
+            wire_map[w.get_key()] = [{'cid':self.cid, 'key':w.get_key(), 'offset':0}]
+            terminated[w.get_key()] = False
+            
+        component = self
+        while component:
+            in_out_keys = [w.get_key() for w in component.IN + component.OUT]
+            for w in wire_map:
+                if not terminated[w]:
+                    cw = wire_map[w][0]['key']
+                    if cw[0] in component.wire_assignments:
+                        new_w = component.wire_assignments[cw[0]]
+                        new_key = new_w.get_key()
+                        new_offset = wire_map[w][0]['offset']
+                        if new_w.slice:
+                            #print('>> SLICE', new_w.slice)
+                            new_offset += new_w.slice.start
+                    else:
+                        raise Exception('wire disappeared')
+                    #print('in', component, wire_map[w], new_w, new_key)
+                    wire_map[w].insert(0,{ 'cid':component.parent_component.cid,
+                                           'key':new_key,
+                                           'offset': new_offset})
+                    if new_w.get_key() not in in_out_keys:
+                        terminated[w] = True
+            component = component.parent_component
+            #if getattr(component,'node',None) == None:
+            #    break
+        return wire_map
+    
+    def top_sort(self):
+        self.topo_ordering = []
+
+        for uid in self.nodes:
+            u = self.nodes[uid]
+            u.current_indegree = u.indegree
+            for w in u.in_wires.values():
+                if w.is_constant:
+                    u.current_indegree -= 1
+
+        for wire in self.IN:
+            e = self.edges[wire.get_key()]
+            for vid in e['dest']:
+                self.nodes[vid].current_indegree -= 1
+                    
+        src_list = []
+        added_set = set()
+
+        for uid in self.nodes:
+            u = self.nodes[uid]
+            if u.current_indegree == 0:
+                src_list.append(u)
+                added_set.add(u.id)
+                
+        ncount = 0
+        while len(src_list)!=0:
+            ncount += 1
+            u = src_list[0]
+            src_list = src_list[1:]
+
+            self.topo_ordering.append(u)
+            for e in u.out_list:
+                for vid in e['dest']:
+                    v = self.nodes[vid]
+                    v.current_indegree -= 1
+                    if v.current_indegree == 0:
+                        if v.id not in added_set:
+                            src_list.append(v)
+                            added_set.add(v.id)
+
+        if ncount != self.n + self.clocked_n:
+            raise Exception('Loop in component parts found')
+
+        if self.get_gate_name() == 'AutoCounter1Bit':
+            print(self)
+            for u in self.topo_ordering:
+                print(u.is_deferred, u.component)
+            
+    
+
+class Component(SimulationMixin):
     class Node:
         def __init__(self, id, component):
             self.id = id
@@ -93,6 +207,9 @@ class Component:
             self.indegree = 0
             self.outdegree = 0
             self.is_deferred = False
+            self.is_pair_node = False
+            self.is_input_node = False
+            self.is_output_node = False
 
     def init_parts(self):
         pass
@@ -112,7 +229,8 @@ class Component:
         self.is_clocked_component = False
         self.clocked_components = []
         self.saved_input_kwargs = None
-        
+
+        self.parent_component = None
 
     def shallow_clone(self):
         return type(self)(**self.wire_assignments)
@@ -158,58 +276,6 @@ class Component:
                 component.set_actual_wire(wire.name, normalize_wire_width(actual_wire, widths))
                 new_actual_wire = component.get_actual_wire(wire.name)
 
-                
-    def top_sort(self):
-        self.topo_ordering = []
-
-        for uid in self.nodes:
-            u = self.nodes[uid]
-            u.current_indegree = u.indegree
-            for w in u.in_wires.values():
-                if w.is_constant:
-                    u.current_indegree -= 1
-
-        for wire in self.IN:
-            e = self.edges[wire.get_key()]
-            for vid in e['dest']:
-                self.nodes[vid].current_indegree -= 1
-                    
-        src_list = []
-        added_set = set()
-        for uid in self.nodes:
-            u = self.nodes[uid]
-            if (u.current_indegree == 0) or (u.component.is_clocked_component):
-                src_list.append(u)
-                added_set.add(u.id)
-
-        ncount = 0
-        while len(src_list)!=0:
-            ncount += 1
-            u = src_list[0]
-            src_list = src_list[1:]
-
-            self.topo_ordering.append(u)
-            for e in u.out_list:
-                for vid in e['dest']:
-                    v = self.nodes[vid]
-                    v.current_indegree -= 1
-                    if v.current_indegree == 0:
-                        if v.id not in added_set:
-                            src_list.append(v)
-                            added_set.add(v.id)
-
-        if ncount != self.n:
-            raise Exception('Loop in component parts found')
-
-        self.topo_ordering = [u for u in self.topo_ordering if not u.component.is_clocked_component]
-        
-        for uid in self.nodes:
-            u = self.nodes[uid]
-            if u.component.is_clocked_component:
-                u.is_deferred = True
-                self.topo_ordering.append(u)
-
-    
     def add_wire_to_node_in_edge(self, node, wire, component):
         key = wire.get_key()
         actual_wire = component.get_actual_wire(wire.name)
@@ -240,7 +306,8 @@ class Component:
         self.edges = {}
         self.internal_components = []
         self.n = len(self.PARTS)
-
+        self.clocked_n = 0
+        
         ncount = 0
         for p in self.PARTS:
             ncount += 1
@@ -249,14 +316,17 @@ class Component:
             p.validate_config()
             component = p.shallow_clone()
             component.initialize()
+
             if component.is_clocked_component:
                 self.is_clocked_component = True
                 self.clocked_components.append(component)
+                self.clocked_n += 1
             
             self.internal_components.append(component)
 
             node = self.Node(nid, component)
             component.node = node
+            component.parent_component = self
 
             self.nodes[nid] = node
 
@@ -280,8 +350,8 @@ class Component:
                 u = self.nodes[nid]
                 u.outdegree += len(e['dest'])
 
-        if self.PARTS:
-            self.top_sort()
+        #if self.PARTS:
+        #    self.top_sort()
 
         self.graph = {
             'nodes': self.nodes,
@@ -329,6 +399,7 @@ class Component:
             estr = w.get_key()
             wire = u.out_wires[estr]
             self.edges[u.out_dict[estr]]['value'] = wire.save_to_signal(self.edges[u.out_dict[estr]]['value'],v)
+            print('propagate:', w.name, u.out_dict[estr], wire.name)
 
     def set_constants(self):
         #if self.get_gate_name() == 'AutoCounter':
@@ -356,20 +427,23 @@ class Component:
                 wire = u.in_wires[k]
                 input_kwargs[k[0]] = wire.slice_signal(self.edges[u.in_dict[k]]['value'])
 
-            #print("IN:", u.component, u.in_dict, input_kwargs)
             output = u.component._process(**input_kwargs)
-            if not u.is_deferred:
-                self.propagate_output(u, output)
-            
+            self.propagate_output(u, output)
+
         return {wire.name:self.edges[wire.get_key()]['value'] for wire in self.OUT}
 
-    def process_deffered(self):
+    def process_deffered(self,**kwargs):
         self.initialize()
 
-        if not self.is_clocked_component:
+        if self.PARTS == []:
             return {}
         
-        kwargs = self.saved_input_kwargs
+        #if not self.is_clocked_component:
+        #    return {}
+        
+        #kwargs = self.saved_input_kwargs
+
+        print('process deferred >', self, kwargs)
         
         for wire in self.IN:
             key = wire.get_key()
@@ -377,11 +451,32 @@ class Component:
                 self.edges[key]['value'] = kwargs[wire.name]
 
         node_ordering = [u for u in self.topo_ordering if u.is_deferred == True]
+        print(node_ordering)
 
         for u in node_ordering:
-            output = u.component._process_deffered()
+            input_kwargs = {}
+            for k in u.in_dict:
+                wire = u.in_wires[k]
+                if self.edges[u.in_dict[k]]['value'] != None:
+                    input_kwargs[k[0]] = wire.slice_signal(self.edges[u.in_dict[k]]['value'])
+                else:
+                    print('Not found', k)
+
+            if u.component.is_clocked_component:
+                print('calling deffered process', u.component, input_kwargs)
+                output = u.component._process_deffered(**input_kwargs)
+            else:
+                print('calling standard process', u.component, input_kwargs)
+                output = u.component._process(**input_kwargs)
+            #if str(type(self)) == "<class 'test.test_ram.RAM64'>":
+            print('-->', u.component, input_kwargs, output)
+            
             self.propagate_output(u, output)
 
+        if str(type(self)) == "<class 'test.test_ram.RAM64'>":
+            for e in self.edges:
+                print(e, self.edges[e])
+            
         return {wire.name:self.edges[wire.get_key()]['value'] for wire in self.OUT}
     
     def _process(self, **kwargs):
@@ -400,15 +495,17 @@ class Component:
             
         return output
     
-    def _process_deffered(self):
-        kwargs = self.saved_input_kwargs
+    def _process_deffered(self, **kwargs):
+        if kwargs == {}:
+            kwargs = self.saved_input_kwargs
         if kwargs == None:
             kwargs = {}
+
         for f in self.preprocessing_hooks.values():
             f(self, kwargs)
 
         #print(">>", self, kwargs)
-        output = self.process_deffered()
+        output = self.process_deffered(**kwargs)
 
         for f in self.postprocessing_hooks.values():
             f(self, kwargs, output)
@@ -420,8 +517,8 @@ class Component:
         return output
     
     def eval(self, **kwargs):
-        #if self.is_clocked_component:
-        self._process_deffered()
+        self._process_deffered(**kwargs)
+        print(self,'DEFFERED')
         return self._process(**kwargs)
     
     def eval_single(self, **kwargs):
@@ -475,8 +572,14 @@ class Wire:
             self.constant_value = None
         
     def __str__(self):
-        return '{}:{}'.format(self.name, self.width)
+        if self.slice:
+            return '{}:{}[{}-{}]'.format(self.name, self.width, self.slice.start, self.slice.stop)
+        else:
+            return '{}:{}'.format(self.name, self.width)
 
+    def __repr__(self):
+        return self.__str__()
+    
     def get_key(self):
         return (self.name, self.width)
 

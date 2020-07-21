@@ -38,19 +38,20 @@ class Register2(Component):
         Bit(In=w.In[1], load=w.load, out=w.out[1]),
     ]
 
-class Register(Component):
+
+class Register16(Component):
     IN = [w(16).In, w.load]
     OUT = [w(16).out]
 
     PARTS = None
 
     def init_parts(self):
-        if Register.PARTS:
+        if Register16.PARTS:
             return
 
-        Register.PARTS = []
+        Register16.PARTS = []
         for i in range(16):
-            Register.PARTS.append(Bit(In=w.In[i], load=w.load, out=w.out[i]))
+            Register16.PARTS.append(Bit(In=w.In[i], load=w.load, out=w.out[i]))
 
 
 class TestBit(unittest.TestCase):
@@ -63,16 +64,25 @@ class TestBit(unittest.TestCase):
 
 class TestReg2(unittest.TestCase):
     def setUp(self):
-        self.bit = Register2()
+        self.reg2 = Register2()
 
     def test_inputTrace_alwaysLoad(self):
-        self.assertEqual(trace(self.bit, {'In':[1,1,2,2,3,3,0,0,1], 'load':'111111111'}, ['out']),
+        self.assertEqual(trace(self.reg2, {'In':[1,1,2,2,3,3,0,0,1], 'load':'111111111'}, ['out']),
                          {'out':[0,1,1,2,2,3,3,0,0]})
 
     def test_inputTrace(self):
-        self.assertEqual(trace(self.bit, {'In':[1,1,2,2,3,3,0,0,1], 'load':'010101010'}, ['out']),
+        self.assertEqual(trace(self.reg2, {'In':[1,1,2,2,3,3,0,0,1], 'load':'010101010'}, ['out']),
                          {'out':[0,0,1,1,2,2,3,3,0]})
 
+
+class TestReg16(unittest.TestCase):
+    def setUp(self):
+        self.reg16 = Register16()
+
+    def test_inputTrace_alwaysLoad(self):
+        self.assertEqual(trace(self.reg16, {'In':[131,2134,32767,65535,355,34234,0,10,0], 'load':'111111111'}, ['out']),
+                         {'out':[0,131,2134,32767,65535,355,34234,0,10]})
+        
 
 if __name__ == '__main__':
     unittest.main()
