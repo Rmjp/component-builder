@@ -1,3 +1,5 @@
+from .exceptions import ComponentError, WireError
+
 class Signal:
     """
     >>> s = Signal(26,6)
@@ -148,7 +150,7 @@ class Component:
             if (w.name not in widths) or (widths[w.name] == 1):
                 widths[w.name] = w.width
             elif (w.width != 1) and (widths[w.name] != w.width):
-                raise Exception('Wire width mismatch {} and {}'.format(widths[w.name],w.width))
+                raise ComponentError(message='Wire width mismatch {} and {}'.format(widths[w.name],w.width))
 
         self.IN = [normalize_wire_width(w, widths) for w in self.IN]
         self.OUT = [normalize_wire_width(w, widths) for w in self.OUT]
@@ -170,7 +172,10 @@ class Component:
                     u.current_indegree -= 1
 
         for wire in self.IN:
-            e = self.edges[wire.get_key()]
+            try:
+                e = self.edges[wire.get_key()]
+            except KeyError as e:
+                raise ComponentError(errors=e) from e
             for vid in e['dest']:
                 self.nodes[vid].current_indegree -= 1
                     
@@ -199,7 +204,7 @@ class Component:
                             added_set.add(v.id)
 
         if ncount != self.n:
-            raise Exception('Loop in component parts found')
+            raise ComponentError(message='Loop in component parts found')
 
         self.topo_ordering = [u for u in self.topo_ordering if not u.component.is_clocked_component]
         
@@ -310,7 +315,7 @@ class Component:
         for wire in self.IN + self.OUT:
             name = wire.name
             if name not in self.wire_assignments:
-                raise Exception('Incomplete wire configuration: ' + name)
+                raise ComponentError(message='Incomplete wire configuration: ' + name)
 
     def initialize(self):
         if self.is_initialized:
@@ -360,8 +365,10 @@ class Component:
             output = u.component._process(**input_kwargs)
             if not u.is_deferred:
                 self.propagate_output(u, output)
-            
-        return {wire.name:self.edges[wire.get_key()]['value'] for wire in self.OUT}
+        try:
+            return {wire.name:self.edges[wire.get_key()]['value'] for wire in self.OUT}
+        except KeyError as e:
+            raise ComponentError(errors=e) from e
 
     def process_deffered(self):
         self.initialize()
@@ -381,8 +388,10 @@ class Component:
         for u in node_ordering:
             output = u.component._process_deffered()
             self.propagate_output(u, output)
-
-        return {wire.name:self.edges[wire.get_key()]['value'] for wire in self.OUT}
+        try:
+            return {wire.name:self.edges[wire.get_key()]['value'] for wire in self.OUT}
+        except KeyError as e:
+            raise ComponentError(errors=e) from e
     
     def _process(self, **kwargs):
         for f in self.preprocessing_hooks.values():
@@ -427,7 +436,7 @@ class Component:
     def eval_single(self, **kwargs):
         output = self.eval(**kwargs)
         if len(output.keys()) != 1:
-            raise Exception("eval single works only with output with exactly one wire")
+            raise ComponentError(message="eval single works only with output with exactly one wire")
         return list(output.values())[0]
 
     def get_gate_name(self):
@@ -445,19 +454,19 @@ class Component:
         if len(index_items) <= 1:
             if self.get_gate_name() == key:
                 return self
-            raise Exception('Internal component access error with key: ' + key)
+            raise ComponentError(message='Internal component access error with key: ' + key)
 
         try:
             indices = [int(x) for x in index_items[1:]]
         except:
-            raise Exception('Internal component access error with key: ' + key)
+            raise ComponentError(message='Internal component access error with key: ' + key)
 
         component = self
         for i in indices:
             component = component.internal_components[i-1]
 
         if component.get_gate_name() != index_items[0]:
-            raise Exception('Internal component access error gate type mismatch: ' + key + ' with ' + component.get_gate_name())
+            raise ComponentError(message='Internal component access error gate type mismatch: ' + key + ' with ' + component.get_gate_name())
 
         return component
     
@@ -494,7 +503,7 @@ class Wire:
 
     def get_constant_signal(self):
         if not self.is_constant:
-            raise Exception('A non-constant wire does not have constant_value')
+            raise WireError(message='A non-constant wire does not have constant_value')
         if self.slice:
             signal = Signal(0, self.width)
             signal.set_slice(self.slice, self.constant_value)
@@ -504,7 +513,7 @@ class Wire:
         
     def save_to_signal(self, signal, value_signal):
         if self.is_constant:
-            raise Exception('Cannot save to constant wires')
+            raise WireError(message='Cannot save to constant wires')
         if self.slice:
             if signal == None:
                 signal = Signal(0, self.width)

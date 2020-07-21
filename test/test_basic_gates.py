@@ -1,7 +1,10 @@
 import unittest
 
 from compbuilder import Signal
-from test.basic_gates import Nand, Not, And, Or, Xor, HalfAdder, FullAdder
+from compbuilder.exceptions import ComponentError
+from test.basic_gates import (
+    Nand, Not, And, Or, Xor, HalfAdder, FullAdder,
+    UnusedINWire, UnusedOUTWire)
 
 T = Signal.T
 F = Signal.F
@@ -89,6 +92,15 @@ class TestAdder(unittest.TestCase):
         self.assertEqual(self.full_adder.eval(a=T, b=F, carry_in=T), {'s':F, 'carry_out':T})
         self.assertEqual(self.full_adder.eval(a=T, b=T, carry_in=T), {'s':T, 'carry_out':T})
 
-        
+
+class TestUnusedWireException(unittest.TestCase):
+    def setUp(self):
+        self.wireIN = UnusedINWire()
+        self.wireOUT = UnusedOUTWire()
+
+    def testException(self):
+        self.assertRaises(ComponentError, lambda:self.wireIN.eval(a=T))
+        self.assertRaises(ComponentError, lambda:self.wireOUT.eval(a=T))
+
 if __name__ == '__main__':
     unittest.main()

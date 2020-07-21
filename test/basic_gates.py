@@ -104,3 +104,18 @@ class FullAdder(Component):
            out=w.carry_out),
     ]
 
+
+class UnusedINWire(Component):
+    IN = [w.a, w.UnusedINWire]
+    OUT = [w.out]
+    PARTS = [
+        Not(In=w.a, out=w.out)
+    ]
+
+
+class UnusedOUTWire(Component):
+    IN = [w.a]
+    OUT = [w.out, w.UnusedOUTWire]
+    PARTS = [
+        Not(In=w.a, out=w.out)
+    ]
