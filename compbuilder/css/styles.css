@@ -56,6 +56,15 @@ text.label {
   font-size: 80%;
 }
 
+input.bus-input {
+  border: 0;
+  font-family: monospace;
+  /*background-color: yellow; */
+  font-weight: bold;
+  font-size: 50%;
+}
+
+
 text.label.connector {
   font-family: monospace;
   font-weight: bold;
