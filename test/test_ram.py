@@ -175,14 +175,8 @@ class RAM64(Component):
 
 class TestRam(unittest.TestCase):
     def test1(self):
-        andgate = FullAdder()
-        #print(report_parts(andgate, 1000))
-        andgate.build_sim_graph()
-        #print(andgate.sim_edges)
-        andgate.top_sort()
-        
-        for u in andgate.sim_topo_ordering:
-            print(u.component.cid, u.component)
+        andgate = And()
+        print(andgate.eval(a=T, b=F))
         
         return
         trace(

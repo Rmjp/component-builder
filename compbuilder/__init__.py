@@ -293,6 +293,52 @@ class SimulationMixin:
         if ncount != self.sim_n:
             raise Exception('Loop in component parts found')
 
+    def get_signal_from_mapped_wire(self, signal, component_wire, offset):
+        v = (signal.value) >> offset
+        return Signal(v & 1, 1)
+        
+    def simulate(self, **kwargs):
+        if not getattr(self, 'sim_topo_ordering', None):
+            self.build_sim_graph()
+            self.top_sort()
+
+        self.edge_values = {}
+            
+        for wire in self.IN:
+            key = wire.get_key()
+            ek = (self.cid, key)
+            self.edge_values[ek] = kwargs[wire.name]
+
+        #print(self.edge_values)
+        for u in self.sim_topo_ordering:
+            input_kwargs = {}
+            component = u.component
+            for wire in component.IN:
+                key = wire.get_key()
+                mapped_wire = component.wire_map[key][0]
+                edge_key = (mapped_wire['cid'], mapped_wire['key'])
+                input_kwargs[wire.name] = self.get_signal_from_mapped_wire(self.edge_values[edge_key],
+                                                                           wire,
+                                                                           mapped_wire['offset'])
+
+            #print('INPUT:', input_kwargs)
+            #print(component)
+            output = component.process(**input_kwargs)
+            #print('OUT:', output)
+
+            for component_wire in component.OUT:
+                key = component_wire.get_key()
+                mapped_wire = component.wire_map[key][0]
+                edge_key = (mapped_wire['cid'], mapped_wire['key'])
+                if edge_key not in self.edge_values:
+                    self.edge_values[edge_key] = Signal(0, mapped_wire['key'][1])
+                signal = self.edge_values[edge_key]
+                signal.set_slice(slice(mapped_wire['offset'], mapped_wire['offset']+1),
+                                 output[component_wire.name])
+                    
+        return {wire.name:self.edge_values[(self.cid, wire.get_key())] for wire in self.OUT}
+
+        
 
 class Component(SimulationMixin):
     class Node:
@@ -465,18 +511,6 @@ class Component(SimulationMixin):
             'edges': self.edges,
         }
 
-        """
-        print()
-        print('--- graph ---', self)
-        print(self, 'NODES:', self.nodes)
-        for uid in self.nodes:
-            u = self.nodes[uid]
-            print(' - ', uid, u.component)
-            print('   ', u.in_dict, u.in_wires)
-        print(self, 'EDGES:', self.edges)
-        print()
-        """
-        
     def get_actual_wire(self, estr):
         return self.wire_assignments[estr]
 
@@ -624,6 +658,8 @@ class Component(SimulationMixin):
         return output
     
     def eval(self, **kwargs):
+        return self.simulate(**kwargs)
+    
         self._process_deffered(**kwargs)
         print(self,'DEFFERED')
         return self._process(**kwargs)
