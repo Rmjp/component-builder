@@ -13,7 +13,7 @@ DEFAULT_LAYOUT_CONFIG = {
     'port_width' : 8,
     'port_height' : 8,
     'connector_width' : 20,
-    'connector_height' : 12,
+    'connector_height' : 16,
 }
 
 COMPOUND_GATE_JS_TEMPLATE = indent(dedent('''

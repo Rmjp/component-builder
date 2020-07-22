@@ -30,7 +30,7 @@ function signal_width(wire) {
 }
 
 //////////////////////////////////
-function drawConnection(dir,w,h) {
+function drawConnector(dir,w,h) {
   if (dir == 'in')
     return "M 0,0 h " + (w-6) + " l 6," + h/2 + " l -6," + h/2 + " h -" + (w-6) + " z";
   else
@@ -100,7 +100,7 @@ function drawChildren(svg,node,component) {
             .classed("bus", function(n) {
               return n.wire.net.width > 1;
             })
-            .attr("d", drawConnection(n.direction,n.width,n.height));
+            .attr("d", drawConnector(n.direction,n.width,n.height));
         n.node_id = "root"; // connectors are only attached to root node
       }
       else if (n.type == "constant") {
@@ -108,7 +108,7 @@ function drawChildren(svg,node,component) {
         d3.select(this)
           .append("path")
             .attr("class","constant " + n.direction)
-            .attr("d", drawConnection(n.direction,n.width,n.height));
+            .attr("d", drawConnector(n.direction,n.width,n.height));
       }
       else { // otherwise, just use a normal rectangle
         d3.select(this)
@@ -279,19 +279,23 @@ function attach_events(svg,component) {
 }
 
 //////////////////////////////////
-function keypress() {
+function input_blurred() {
+  var val = parseInt(this.value,16);
+  if (isNaN(val)) {
+    // restore original value from the corresponding net
+    this.value = signal_value_hex(this.net.signal,this.net.width);
+  }
+  else {
+    this.component.update({[this.name]:val});
+    update(this.svg,this.component);
+    this.value = signal_value_hex(this.net.signal,this.net.width);
+  }
+}
+
+//////////////////////////////////
+function input_keypressed() {
   if (event.key == "Enter") {
     this.blur();
-    var val = parseInt(this.value,16);
-    if (isNaN(val)) {
-      // restore original value from the corresponding net
-      this.value = this.net.signal.toString(16).toUpperCase();
-    }
-    else {
-      this.component.update({[this.name]:val});
-      update(this.svg,this.component);
-      this.value = this.net.signal.toString(16).toUpperCase();
-    }
   }
 }
 
@@ -302,21 +306,22 @@ function attach_inputs(svg,component) {
     .each(function(lbl) {
       var g = d3.select(this.parentNode);
       g.select("text").remove();
+      var net = lbl.wire.net;
       var d3_input = g.append("foreignObject")
-        .attr("width","50")
-        .attr("height","20")
-        .attr("x","2")
-        .attr("y","-4")
+        .attr("width",lbl.width-6)
+        .attr("height",lbl.height)
+        .attr("x","1")
+        .attr("y","-1")
         .append("xhtml:div")
-          .attr("xmlns","http://www.w3.org/1999/xhtml")
           .append("xhtml:input")
             .attr("class","bus-input")
-            .attr("size",Math.ceil(lbl.wire.net.width/4))
-            .attr("maxlength",Math.ceil(lbl.wire.net.width/4))
+            .attr("size",Math.ceil(net.width/4)+1)
+            .attr("maxlength",Math.ceil(net.width/4))
             .attr("name",lbl.wire.name)
-            .attr("value",lbl.wire.net.signal);
+            .attr("value",signal_value_hex(net.signal,net.width));
       var input = d3_input.node();
-      input.onkeypress = keypress;
+      input.onkeypress = input_keypressed;
+      input.onblur = input_blurred;
       input.net = lbl.wire.net;
       input.component = component;
       input.svg = svg;
