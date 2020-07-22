@@ -80,22 +80,39 @@ Signal.F = Signal(0)
 Signal.T = Signal(1)
 
 class SimulationMixin:
+    class SimNode:
+        def __init__(self, id, component):
+            self.id = id
+            self.component = component
+            self.in_keys = component.get_in_keys()
+            self.out_keys = component.get_out_keys()
+            self.in_mapped_wires = [component.wire_map[k][0] for k in component.get_in_keys()]
+            self.out_mapped_wires = [component.wire_map[k][0] for k in component.get_out_keys()]
+            self.in_edge_keys = []
+            self.out_edge_keys = []
+            self.indegree = 0
+            self.outdegree = 0
+            self.is_pair_node = False
+            self.is_input_node = False
+            self.is_output_node = False
+
     def extract_nets(self):
         self.initialize()
         
         base_components = []
-
+        all_components = []
         ccount = [0]
         
         def assign_component_cid(component):
             ccount[0] += 1
             component.cid = ccount[0]
-            print(component.cid, component)
 
             for c in component.internal_components:
+                c.parent_component = component
                 assign_component_cid(c)
         
         def extract_base_components(component):
+            all_components.append(component)
             if component.internal_components == []:
                 base_components.append(component)
             else:
@@ -104,65 +121,152 @@ class SimulationMixin:
 
         assign_component_cid(self)
         extract_base_components(self)
-        return base_components
+        return (base_components, all_components)
 
     def trace_wire(self):
+        #print('Trace', self.cid, self)
         wire_map = {}
         terminated = {}
-        for w in self.IN:
-            wire_map[w.get_key()] = [{'cid':self.cid, 'key':w.get_key(), 'offset':0}]
-            terminated[w.get_key()] = False
-
-        for w in self.OUT:
-            wire_map[w.get_key()] = [{'cid':self.cid, 'key':w.get_key(), 'offset':0}]
-            terminated[w.get_key()] = False
+        for k in self.get_in_keys() + self.get_out_keys():
+            wire_map[k] = [{'cid':self.cid,
+                            'key':k,
+                            'offset':0,
+                            'is_constant': False}]
+            terminated[k] = False
             
         component = self
-        while component:
-            in_out_keys = [w.get_key() for w in component.IN + component.OUT]
+        while component.parent_component:
+            in_out_keys = component.parent_component.get_in_keys() + component.parent_component.get_out_keys()
+            #print('IN OUT:', component, in_out_keys)
             for w in wire_map:
                 if not terminated[w]:
                     cw = wire_map[w][0]['key']
+                    #print('current', cw, component)
                     if cw[0] in component.wire_assignments:
                         new_w = component.wire_assignments[cw[0]]
                         new_key = new_w.get_key()
                         new_offset = wire_map[w][0]['offset']
                         if new_w.slice:
-                            #print('>> SLICE', new_w.slice)
                             new_offset += new_w.slice.start
                     else:
                         raise Exception('wire disappeared')
                     #print('in', component, wire_map[w], new_w, new_key)
-                    wire_map[w].insert(0,{ 'cid':component.parent_component.cid,
-                                           'key':new_key,
-                                           'offset': new_offset})
-                    if new_w.get_key() not in in_out_keys:
+                    #print('new', cw, component.parent_component.cid, new_key) 
+                    wire_map[w].insert(0,{'cid':component.parent_component.cid,
+                                          'key':new_key,
+                                          'offset': new_offset,
+                                          'is_constant': new_w.is_constant})
+                    if new_key not in in_out_keys:
                         terminated[w] = True
+                        #print('Final', w, wire_map[w][0])
             component = component.parent_component
-            #if getattr(component,'node',None) == None:
-            #    break
+
         return wire_map
+
+    def build_sim_graph(self):
+        base_components, all_components = self.extract_nets()
+
+        nodes = {}
+        self.sim_edges = {}
+
+        def get_or_create_edge(edge_key):
+            if edge_key in self.sim_edges:
+                return self.sim_edges[edge_key]
+            else:
+                e = {
+                    'src': [],
+                    'dest': [],
+                    'signal': None
+                }
+                self.sim_edges[edge_key] = e
+                return e
+
+        ncount = 0
+        
+        for c in base_components:
+            c.wire_map = c.trace_wire()
+
+            if c.is_clocked_component:
+                ncount += 1
+                in_node = self.SimNode(ncount, c)
+                in_node.is_pair_node = True
+                in_node.is_input_node = True
+                nodes[in_node.id] = in_node
+                
+                ncount += 1
+                out_node = self.SimNode(ncount, c)
+                out_node.is_pair_node = True
+                out_node.is_output_node = True
+                nodes[out_node.id] = out_node
+
+                ek = (c.cid, ('in-out-pair',1))
+                e = get_or_create_edge(ek)
+                e['src'].append(out_node.id)
+                e['dest'].append(in_node.id)
+
+                in_node.in_edge_keys.append(ek)
+                out_node.out_edge_keys.append(ek)
+
+                in_node.indegree = len(c.IN) + 1
+                out_node.outdegree = len(c.OUT) + 1
+            else:
+                ncount += 1
+                node = self.SimNode(ncount, c)
+                nodes[node.id] = node
+                node.indegree = len(c.IN)
+                node.outdegree = len(c.OUT)
+
+                in_node = node
+                out_node = node
+                
+            for k in c.get_in_keys():
+                wmap = c.wire_map[k][0]
+                ek = (wmap['cid'], wmap['key'])
+                e = get_or_create_edge(ek)
+                e['dest'].append(in_node.id)
+                in_node.in_edge_keys.append(ek)
+
+            for k in c.get_out_keys():
+                wmap = c.wire_map[k][0]
+                ek = (wmap['cid'], wmap['key'])
+                e = get_or_create_edge(ek)
+                e['src'].append(out_node.id)
+                out_node.out_edge_keys.append(ek)
+
+        self.sim_nodes = nodes
+        self.sim_n = len(nodes)
+        
+        self.sim_graph = {
+            'nodes': self.sim_nodes,
+            'edges': self.sim_edges,
+        }
+        
     
     def top_sort(self):
-        self.topo_ordering = []
+        self.sim_topo_ordering = []
 
-        for uid in self.nodes:
-            u = self.nodes[uid]
+        for uid in self.sim_nodes:
+            u = self.sim_nodes[uid]
             u.current_indegree = u.indegree
-            for w in u.in_wires.values():
-                if w.is_constant:
+            for m_wire in u.in_mapped_wires:
+                if m_wire['is_constant']:
                     u.current_indegree -= 1
 
-        for wire in self.IN:
-            e = self.edges[wire.get_key()]
+        for ek in self.sim_edges:
+            e = self.sim_edges[ek]
+            e['in_signals'] = len(e['src'])
+            e['current_in_count'] = 0
+                    
+        for key in self.get_in_keys():
+            e = self.sim_edges[(self.cid, key)]
             for vid in e['dest']:
-                self.nodes[vid].current_indegree -= 1
+                self.sim_nodes[vid].current_indegree -= 1
                     
         src_list = []
         added_set = set()
 
-        for uid in self.nodes:
-            u = self.nodes[uid]
+        for uid in self.sim_nodes:
+            u = self.sim_nodes[uid]
             if u.current_indegree == 0:
                 src_list.append(u)
                 added_set.add(u.id)
@@ -173,25 +277,22 @@ class SimulationMixin:
             u = src_list[0]
             src_list = src_list[1:]
 
-            self.topo_ordering.append(u)
-            for e in u.out_list:
-                for vid in e['dest']:
-                    v = self.nodes[vid]
-                    v.current_indegree -= 1
-                    if v.current_indegree == 0:
-                        if v.id not in added_set:
-                            src_list.append(v)
-                            added_set.add(v.id)
+            self.sim_topo_ordering.append(u)
+            for ek in u.out_edge_keys:
+                e = self.sim_edges[ek]
+                e['current_in_count'] += 1
+                if e['current_in_count'] == e['in_signals']:
+                    for vid in e['dest']:
+                        v = self.sim_nodes[vid]
+                        v.current_indegree -= 1
+                        if v.current_indegree == 0:
+                            if v.id not in added_set:
+                                src_list.append(v)
+                                added_set.add(v.id)
 
-        if ncount != self.n + self.clocked_n:
+        if ncount != self.sim_n:
             raise Exception('Loop in component parts found')
 
-        if self.get_gate_name() == 'AutoCounter1Bit':
-            print(self)
-            for u in self.topo_ordering:
-                print(u.is_deferred, u.component)
-            
-    
 
 class Component(SimulationMixin):
     class Node:
@@ -235,6 +336,12 @@ class Component(SimulationMixin):
     def shallow_clone(self):
         return type(self)(**self.wire_assignments)
 
+    def get_in_keys(self):
+        return [w.get_key() for w in self.IN]
+    
+    def get_out_keys(self):
+        return [w.get_key() for w in self.OUT]
+    
     def get_or_create_edge(self, estr):
         if estr in self.edges:
             e = self.edges[estr]

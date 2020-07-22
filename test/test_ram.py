@@ -175,23 +175,15 @@ class RAM64(Component):
 
 class TestRam(unittest.TestCase):
     def test1(self):
-        andgate = Register()
-
-        print(report_parts(andgate, level=100))
+        andgate = FullAdder()
+        #print(report_parts(andgate, 1000))
+        andgate.build_sim_graph()
+        #print(andgate.sim_edges)
+        andgate.top_sort()
         
-        nets = andgate.extract_nets()
-        for c in nets:
-            print(c.cid, c, c.trace_wire())
-
+        for u in andgate.sim_topo_ordering:
+            print(u.component.cid, u.component)
         
-        return
-        ram64 = RAM64()
-
-        nets = ram64.extract_nets()
-        for c in nets:
-            print(c.cid, c, c.node.in_dict, c.node.out_dict)
-            print(c.trace_wire())
-
         return
         trace(
             ram64, 
