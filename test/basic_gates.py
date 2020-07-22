@@ -26,14 +26,14 @@ class DFF(Component):
         super(DFF, self).__init__(**kwargs)
         self.is_clocked_component = True
     
-    def process_deffered(self, In=None):
+    def process(self, In=None):
         if self.saved_input_kwargs == None:
             self.saved_output = {'out': Signal(0)}
         else:
             self.saved_output = {'out': self.saved_input_kwargs['In']}
         return self.saved_output
 
-    def process(self, In):
+    def process_deffered(self, In):
         self.saved_input_kwargs = {'In': In}
         return self.saved_output
 

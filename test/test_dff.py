@@ -31,28 +31,28 @@ class FlipComp(Component):
     ]
     
 class SeqComp1(Component):
-    IN = [w.a]
+    IN = [w.In]
     OUT = [w.out]
 
     PARTS = [
-        DFF(In=w.a, out=w.out),
+        DFF(In=w.In, out=w.out),
     ]
     
 class SeqComp2(Component):
-    IN = [w.a]
+    IN = [w.In]
     OUT = [w.out]
 
     PARTS = [
-        DFF(In=w.a, out=w.b),
+        DFF(In=w.In, out=w.b),
         DFF(In=w.b, out=w.out),
     ]
     
 class SeqComp3(Component):
-    IN = [w.a]
+    IN = [w.In]
     OUT = [w.out]
 
     PARTS = [
-        DFF(In=w.a, out=w.b),
+        DFF(In=w.In, out=w.b),
         DFF(In=w.b, out=w.c),
         Not(In=w.c, out=w.d),
         DFF(In=w.d, out=w.out),
@@ -137,7 +137,7 @@ class AutoCounter1Bit(Component):
         DFF(In=w.out[3], out=w.q[3]),
     ]
     
-class TestClockedComponent(unittest.TestCase):
+class TestCounter(unittest.TestCase):
     def setUp(self):
         self.counter = AutoCounter()
         self.counter_1bit = AutoCounter1Bit()
