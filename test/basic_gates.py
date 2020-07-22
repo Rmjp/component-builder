@@ -33,9 +33,8 @@ class DFF(Component):
             self.saved_output = {'out': self.saved_input_kwargs['In']}
         return self.saved_output
 
-    def process_deffered(self, In):
+    def prepare_process(self, In):
         self.saved_input_kwargs = {'In': In}
-        return self.saved_output
 
 
 class Not(Component):

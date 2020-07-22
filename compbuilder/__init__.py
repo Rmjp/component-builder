@@ -374,7 +374,7 @@ class SimulationMixin:
                 output = component.process(**input_kwargs)
                 self.set_component_output(component, output)
             else:
-                output = component.process_deffered(**input_kwargs)
+                component.prepare_process(**input_kwargs)
 
         return {wire.name:self.edge_values[(self.cid, wire.get_key())] for wire in self.OUT}
 
