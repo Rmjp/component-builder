@@ -30,7 +30,7 @@ function signal_width(wire) {
 }
 
 //////////////////////////////////
-function drawConnection(dir,w,h) {
+function drawConnector(dir,w,h) {
   if (dir == 'in')
     return "M 0,0 h " + (w-6) + " l 6," + h/2 + " l -6," + h/2 + " h -" + (w-6) + " z";
   else
@@ -94,14 +94,13 @@ function drawChildren(svg,node,component) {
         d3.select(this)
           .append("path")
             .attr("class","connector " + n.direction)
-            .attr("d", drawConnection(n.direction,n.width,n.height));
-        //if (n.wire.net.width > 1) { // display signal's value for bus wires
-        //  d3.select(this)
-        //    .append("text")
-        //      .attr("class","signal")
-        //      .text("")
-        //      .attr("x",n.direction == "in" ? 4 : 10);
-        //}
+            .classed("single", function(n) {
+              return n.wire.net.width == 1;
+            })
+            .classed("bus", function(n) {
+              return n.wire.net.width > 1;
+            })
+            .attr("d", drawConnector(n.direction,n.width,n.height));
         n.node_id = "root"; // connectors are only attached to root node
       }
       else if (n.type == "constant") {
@@ -109,7 +108,7 @@ function drawChildren(svg,node,component) {
         d3.select(this)
           .append("path")
             .attr("class","constant " + n.direction)
-            .attr("d", drawConnection(n.direction,n.width,n.height));
+            .attr("d", drawConnector(n.direction,n.width,n.height));
       }
       else { // otherwise, just use a normal rectangle
         d3.select(this)
@@ -167,6 +166,7 @@ function drawChildren(svg,node,component) {
           offx = n.direction == "out" ? 10 : 4;
           offy = -3;
           nodeType += " " + n.direction;
+          nodeType += " " + (n.wire.net.width > 1 ? "bus" : "single");
         }
         labelGroup.selectAll("text.label")
           .data(n.labels, function(lbl) { return lbl.id; })
@@ -254,7 +254,7 @@ function update(svg,component) {
 }
 
 //////////////////////////////////
-function attach_inputs(svg,component) {
+function attach_events(svg,component) {
   svg.selectAll(".connector.in")
     .on("mouseover", function(c) {
       d3.select(this).classed("hover",true);
@@ -262,6 +262,7 @@ function attach_inputs(svg,component) {
     .on("mouseout", function(c) {
       d3.select(this).classed("hover",false);
     })
+  svg.selectAll(".connector.in.single")
     .on("click", function(c) {
       var signal = c.wire.net.signal;
       signal = signal ? 0 : 1;
@@ -278,6 +279,56 @@ function attach_inputs(svg,component) {
 }
 
 //////////////////////////////////
+function input_blurred() {
+  var val = parseInt(this.value,16);
+  if (isNaN(val)) {
+    // restore original value from the corresponding net
+    this.value = signal_value_hex(this.net.signal,this.net.width);
+  }
+  else {
+    this.component.update({[this.name]:val});
+    update(this.svg,this.component);
+    this.value = signal_value_hex(this.net.signal,this.net.width);
+  }
+}
+
+//////////////////////////////////
+function input_keypressed() {
+  if (event.key == "Enter") {
+    this.blur();
+  }
+}
+
+//////////////////////////////////
+function attach_inputs(svg,component) {
+  // attach input box for each bus input connector
+  svg.selectAll(".connector.in.bus")
+    .each(function(lbl) {
+      var g = d3.select(this.parentNode);
+      g.select("text").remove();
+      var net = lbl.wire.net;
+      var d3_input = g.append("foreignObject")
+        .attr("width",lbl.width-6)
+        .attr("height",lbl.height)
+        .attr("x","1")
+        .attr("y","-1")
+        .append("xhtml:div")
+          .append("xhtml:input")
+            .attr("class","bus-input")
+            .attr("size",Math.ceil(net.width/4)+1)
+            .attr("maxlength",Math.ceil(net.width/4))
+            .attr("name",lbl.wire.name)
+            .attr("value",signal_value_hex(net.signal,net.width));
+      var input = d3_input.node();
+      input.onkeypress = input_keypressed;
+      input.onblur = input_blurred;
+      input.net = lbl.wire.net;
+      input.component = component;
+      input.svg = svg;
+    });
+}
+
+//////////////////////////////////
 function create(selector,config) {
   var elk = new ELK();
   elk.layout(graph).then(function(layout) {
@@ -285,6 +336,7 @@ function create(selector,config) {
                                    .attr("width", layout.width)
                                    .attr("height", layout.height);
     drawNode(svg,layout,component);
+    attach_events(svg,config.component);
     attach_inputs(svg,config.component);
     update(svg,config.component);
   });

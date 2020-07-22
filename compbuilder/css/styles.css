@@ -56,14 +56,22 @@ text.label {
   font-size: 80%;
 }
 
+input.bus-input {
+  border: 0;
+  font-family: monospace;
+  /*background-color: yellow; */
+  font-weight: bold;
+}
+
+
 text.label.connector {
   font-family: monospace;
   font-weight: bold;
-  font-size: 80%;
+  font-size: 100%;
 }
 
 text.label.constant {
   font-family: monospace;
   font-weight: bold;
-  font-size: 80%;
+  font-size: 100%;
 }
