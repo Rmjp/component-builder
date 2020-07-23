@@ -154,6 +154,70 @@ class Bus3(Component):
         Goto(In=w.In2, out=w.out[2]),
     ]
 
+
+class FastRAM8Output(Component):
+    IN = [w(16).In, w(3).address, w.load, w.latch_link]
+    OUT = [w(16).out]
+
+    PARTS = []
+    
+    def shallow_clone(self):
+        return type(self)(self.buffer, **self.wire_assignments)
+
+    def __init__(self, buffer, **kwargs):
+        super(FastRAM8Output, self).__init__(**kwargs)
+        self.buffer = buffer
+        
+    def process(self, In, address, load, latch_link):
+        return {'out': Signal(self.buffer[address.get()], 16)}
+
+
+class FastRAM8Latch(Component):
+    IN = [w(16).In, w(3).address, w.load]
+    OUT = [w.latch_link]
+
+    PARTS = []
+    
+    def shallow_clone(self):
+        return type(self)(self.buffer, **self.wire_assignments)
+
+    def __init__(self, buffer, **kwargs):
+        super(FastRAM8Latch, self).__init__(**kwargs)
+        self.buffer = buffer
+        self.is_clocked_component = True
+        self.saved_input_kwargs = None
+
+    def process(self):
+        if self.saved_input_kwargs:
+            if self.saved_input_kwargs['load'].get() == 1:
+                address = self.saved_input_kwargs['address']
+                In = self.saved_input_kwargs['In']
+                self.buffer[address.get()] = In.get()
+
+        return {'latch_link': Signal(0)}
+        
+    def prepare_process(self, **kwargs):
+        self.saved_input_kwargs = kwargs
+    
+class FastRAM8(Component):
+    IN = [w(16).In, w(3).address, w.load]
+    OUT = [w(16).out]
+
+    PARTS = None
+
+    def __init__(self, **kwargs):
+        super(FastRAM8, self).__init__(**kwargs)
+        self.buffer = [0] * 8
+
+        self.PARTS = [
+            FastRAM8Output(self.buffer,
+                           In=w.In, address=w.address, load=w.load,
+                           out=w.out,
+                           latch_link=w.dummy),
+            FastRAM8Latch(self.buffer, In=w.In, address=w.address, load=w.load,
+                          latch_link=w.dummy),
+        ]
+
 class RAM64(Component):
     IN = [w(16).In, w(6).address, w.load]
     OUT = [w(16).out]
@@ -173,14 +237,29 @@ class RAM64(Component):
         Mux8Way16(a=w.o0, b=w.o1, c=w.o2, d=w.o3, e=w.o4, f=w.o5, g=w.o6, h=w.o7, sel=w.addr345, out=w.out),
     ]
 
-class TestRam(unittest.TestCase):
-    def test1(self):
-        ram64 = RAM64()
 
-        In = [0,0,10,10,10,3,3,3,7,7,7,7,32769,32769,32769,32769,32769,32769,32769,32769,32769,15,15,32769,15,15,32769,15,15,32769,15,15,32769,15,15,32769,15,15,32769,15,15,32769,15,15,32769,32769]
-        load = [0,1,0,1,0,0,1,0,0,1,0,0,1,1,1,1,1,1,1,1,0,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,0]
-        address = [0,0,0,1,0,3,3,3,1,7,7,0,0,1,2,3,4,5,6,7,0,0,0,0,1,0,1,2,0,2,3,0,3,4,0,4,5,0,5,6,0,6,7,0,7,0]
-        
+class RAM64wFastRAM8(Component):
+    IN = [w(16).In, w(6).address, w.load]
+    OUT = [w(16).out]
+
+    PARTS = [
+        Bus3(In0=w.address[0], In1=w.address[1], In2=w.address[2], out=w(3).addr012),
+        Bus3(In0=w.address[3], In1=w.address[4], In2=w.address[5], out=w(3).addr345),
+        DMux8Way(In=w.load, sel=w.addr345, a=w.ld0, b=w.ld1, c=w.ld2, d=w.ld3, e=w.ld4, f=w.ld5, g=w.ld6, h=w.ld7),
+        FastRAM8(In=w.In, address=w.addr012, load=w.ld0, out=w(16).o0),
+        FastRAM8(In=w.In, address=w.addr012, load=w.ld1, out=w(16).o1),
+        FastRAM8(In=w.In, address=w.addr012, load=w.ld2, out=w(16).o2),
+        FastRAM8(In=w.In, address=w.addr012, load=w.ld3, out=w(16).o3),
+        FastRAM8(In=w.In, address=w.addr012, load=w.ld4, out=w(16).o4),
+        FastRAM8(In=w.In, address=w.addr012, load=w.ld5, out=w(16).o5),
+        FastRAM8(In=w.In, address=w.addr012, load=w.ld6, out=w(16).o6),
+        FastRAM8(In=w.In, address=w.addr012, load=w.ld7, out=w(16).o7),
+        Mux8Way16(a=w.o0, b=w.o1, c=w.o2, d=w.o3, e=w.o4, f=w.o5, g=w.o6, h=w.o7, sel=w.addr345, out=w.out),
+    ]
+
+
+class TestRAMBase(unittest.TestCase):
+    def perform_test_and_check(self, ram64, In, load, address):
         inputs = {'In': In,
                   'load': load,
                   'address': address,}
@@ -191,7 +270,42 @@ class TestRam(unittest.TestCase):
             expected_out.append(Signal(sim_ram[address[r]], 16))
             if load[r] == 1:
                 sim_ram[address[r]] = In[r]
-        
+
         tr = trace(ram64, inputs, ['out'])
         for r in range(len(In)):
             self.assertEqual(tr['out'][r].value, expected_out[r].value)
+
+    def do_test_random(self, ram64, length):
+        from random import randint
+
+        In = []
+        load = []
+        address = []
+        for l in range(length):
+            In.append(randint(0,65535))
+            load.append(randint(0,1))
+            address.append(randint(0,63))
+
+        self.perform_test_and_check(ram64, In, load, address)
+    
+    def do_test(self, ram64):
+        In = [0,0,10,10,10,3,3,3,7,7,7,7,32769,32769,32769,32769,32769,32769,32769,32769,32769,15,15,32769,15,15,32769,15,15,32769,15,15,32769,15,15,32769,15,15,32769,15,15,32769,15,15,32769,32769]
+        load = [0,1,0,1,0,0,1,0,0,1,0,0,1,1,1,1,1,1,1,1,0,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,0]
+        address = [0,0,0,1,0,3,3,3,1,7,7,0,0,1,2,3,4,5,6,7,0,0,0,0,1,0,1,2,0,2,3,0,3,4,0,4,50,0,50,60,0,60,57,0,57,0]
+
+        self.perform_test_and_check(ram64, In, load, address)
+
+class TestRAM(TestRAMBase):
+    def test_ram(self):
+        ram64 = RAM64()
+        self.do_test(ram64)
+
+class TestFastRAM(TestRAMBase):
+    def test_ram(self):
+        ram64 = RAM64wFastRAM8()
+        self.do_test(ram64)
+
+    def test_ram_random(self):
+        ram64 = RAM64wFastRAM8()
+        self.do_test_random(ram64,1000)
+

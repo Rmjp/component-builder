@@ -25,6 +25,7 @@ class DFF(Component):
     def __init__(self, **kwargs):
         super(DFF, self).__init__(**kwargs)
         self.is_clocked_component = True
+        self.saved_input_kwargs = None
     
     def process(self, In=None):
         if self.saved_input_kwargs == None:
