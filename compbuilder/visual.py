@@ -536,8 +536,13 @@ def interact(component_class,**kwargs):
         <script src="https://www.cpe.ku.ac.th/~cpj/tmp/component.js"></script>
         <script src="https://www.cpe.ku.ac.th/~cpj/tmp/visual.js"></script>
     """))
+
+    component = component_class()
+    component.initialize()
+    component.add_clk_wire()
+    
     DISP.display_html(
-        DISP.HTML('<script>' + component_class().generate_js(**kwargs) + '</script>'))
+        DISP.HTML('<script>' + component.generate_js(**kwargs) + '</script>'))
     DISP.display_html(DISP.HTML("""
         <link rel="stylesheet" type="text/css" href="https://www.cpe.ku.ac.th/~cpj/tmp/styles.css" />
         <div id="diagram"></div>

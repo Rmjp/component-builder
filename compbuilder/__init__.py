@@ -404,6 +404,8 @@ class Component(SimulationMixin):
             self.is_input_node = False
             self.is_output_node = False
 
+            self.is_clk_wire_added = False
+
     def init_parts(self):
         pass
             
@@ -428,6 +430,22 @@ class Component(SimulationMixin):
     def shallow_clone(self):
         return type(self)(**self.wire_assignments)
 
+    def add_clk_wire(self):
+        if self.is_clocked_component:
+            if 'clk' not in [w.name for w in self.IN]:
+                self.is_clk_wire_added = True
+                self.IN.append(w.clk)
+
+                for c in self.internal_components:
+                    c.add_clk_wire()
+
+    def restore_clk_wire(self):
+        if self.is_clk_wire_added:
+            self.IN = [w for w in self.IN if w.name != 'clk']
+
+            for c in self.internal_components:
+                c.restore_clk_wire()
+    
     def get_in_keys(self):
         return [w.get_key() for w in self.IN]
     
