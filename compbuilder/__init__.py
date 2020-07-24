@@ -433,8 +433,6 @@ class Component(SimulationMixin):
     def init_interact(self):
         self.initialize()
         self.add_clk_wire()
-        if self.is_clk_wire_added:
-            self.build_graph()
     
     def add_clk_wire(self):
         if self.is_clocked_component:
@@ -444,6 +442,10 @@ class Component(SimulationMixin):
 
                 self.wire_assignments['clk'] = w.clk
 
+                for node in self.nodes.values():
+                    if node.component.is_clocked_component:
+                        node.component.in_wires['clk'] = w.clk
+
                 for c in self.internal_components:
                     c.add_clk_wire()
 
@@ -452,6 +454,10 @@ class Component(SimulationMixin):
             self.IN = [w for w in self.IN if w.name != 'clk']
 
             del self.wire_assignments['clk']
+
+            for node in self.nodes.values():
+                if node.component.is_clocked_component:
+                    del node.component.in_wires['clk']
             
             for c in self.internal_components:
                 c.restore_clk_wire()
