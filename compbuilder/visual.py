@@ -538,8 +538,7 @@ def interact(component_class,**kwargs):
     """))
 
     component = component_class()
-    component.initialize()
-    component.add_clk_wire()
+    component.init_interact()
     
     DISP.display_html(
         DISP.HTML('<script>' + component.generate_js(**kwargs) + '</script>'))
