@@ -444,7 +444,7 @@ class Component(SimulationMixin):
 
                 for node in self.nodes.values():
                     if node.component.is_clocked_component:
-                        node.component.in_wires['clk'] = w.clk
+                        node.in_wires['clk'] = w.clk
 
                 for c in self.internal_components:
                     c.add_clk_wire()
@@ -457,7 +457,7 @@ class Component(SimulationMixin):
 
             for node in self.nodes.values():
                 if node.component.is_clocked_component:
-                    del node.component.in_wires['clk']
+                    del node.in_wires['clk']
             
             for c in self.internal_components:
                 c.restore_clk_wire()
