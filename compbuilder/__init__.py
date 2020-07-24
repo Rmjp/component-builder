@@ -436,6 +436,8 @@ class Component(SimulationMixin):
                 self.is_clk_wire_added = True
                 self.IN.append(w.clk)
 
+                self.wire_assignments['clk'] = w.clk
+
                 for c in self.internal_components:
                     c.add_clk_wire()
 
@@ -443,8 +445,12 @@ class Component(SimulationMixin):
         if self.is_clk_wire_added:
             self.IN = [w for w in self.IN if w.name != 'clk']
 
+            del self.wire_assignments['clk']
+            
             for c in self.internal_components:
                 c.restore_clk_wire()
+
+            self.is_clk_wire_added = False
     
     def get_in_keys(self):
         return [w.get_key() for w in self.IN]
