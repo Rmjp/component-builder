@@ -198,3 +198,27 @@ class TestFlatConstant(unittest.TestCase):
         self.assertEqual(and1.update(a=F,b=T)['out'],F)
         self.assertEqual(and1.update(a=T,b=F)['out'],F)
         self.assertEqual(and1.update(a=T,b=T)['out'],T)
+
+################################################
+class Mem8NoClk(VisualComponent):
+    IN = [w(8).In]
+    OUT = [w(8).out]
+    PARTS = [
+        DFF(In=w.In[0],out=w.out[0],clk=w.clk),
+        DFF(In=w.In[1],out=w.out[1],clk=w.clk),
+        DFF(In=w.In[2],out=w.out[2],clk=w.clk),
+        DFF(In=w.In[3],out=w.out[3],clk=w.clk),
+        DFF(In=w.In[4],out=w.out[4],clk=w.clk),
+        DFF(In=w.In[5],out=w.out[5],clk=w.clk),
+        DFF(In=w.In[6],out=w.out[6],clk=w.clk),
+        DFF(In=w.In[7],out=w.out[7],clk=w.clk),
+    ]
+
+class TestFlatMultibitDFFNoClk(unittest.TestCase):
+    def setUp(self):
+        self.mem = Mem8()
+        self.mem.add_clk_wire()
+        self.mem.flatten()
+
+    def test_clk_added(self):
+        self.assertTrue('clk' in self.mem._generate_part_config())
