@@ -331,14 +331,14 @@ class VisualMixin:
                             continue # not overlapping
                         edge = self._create_edge(sport,dport)
                         # attach wire's metadata to help styling
-                        if dir == 'in':
-                            wslice = dslice
-                            wire = dwire
-                        elif dir == 'out':
+                        if sslice.stop - sslice.start < dslice.stop - dslice.start:
+                            # source's slice is a subset of destination's
                             wslice = sslice
                             wire = swire
                         else:
-                            raise Exception('Should not be here')
+                            # destination's slice is a subset of source's
+                            wslice = dslice
+                            wire = dwire
                         netwire = _generate_net_wiring((net,wslice),netmap)
                         edge['wire'] = netwire
                         if wire.is_constant:
