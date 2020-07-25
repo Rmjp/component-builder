@@ -3,7 +3,7 @@ import math
 from copy import deepcopy
 from textwrap import indent,dedent
 import json
-import compbuilder.flatten
+from . import flatten
 
 DEFAULT_LAYOUT_CONFIG = {
     'width' : 60,
@@ -262,69 +262,79 @@ class VisualMixin:
         if depth > 0 and self.PARTS:
             # maintain a data structure that allows inquiries of an internal
             # wire's source and destination ELK ports by its name and slicing
-            # wires: wire -> (net,[source...],[dest...])
-            # where each source and dest is of the form (ELK-port-id,slice)
+            # wires: wire -> (net,dir,[source...],[dest...])
+            # where each source and dest is of the form (ELK-port-id,net-slice)
             wires = {}
             for pin in self.IN:
-                _,sources,_ = wires.setdefault(pin.get_key(), 
-                                (self.wiring[pin.get_key()],[],[]))
-                entry = port_map[pin.get_key()], get_wire_slice(pin)
+                net,nslice = self.wiring[pin.get_key()]
+                _,_,sources,_ = wires.setdefault(pin.get_key(), (net,'in',[],[]))
+                entry = (port_map[pin.get_key()], nslice)
                 sources.append(entry)
             for pin in self.OUT:
-                _,_,dests = wires.setdefault(pin.get_key(),
-                              (self.wiring[pin.get_key()],[],[]))
-                entry = port_map[pin.get_key()], get_wire_slice(pin)
+                net,nslice = self.wiring[pin.get_key()]
+                _,_,_,dests = wires.setdefault(pin.get_key(), (net,'out',[],[]))
+                entry = (port_map[pin.get_key()], nslice)
                 dests.append(entry)
+            constants = set()
             for nid,node in self.nodes.items():
                 comp = node.component
                 for pin in comp.IN:
                     wire = comp.get_actual_wire(pin.name)
-                    _,sources,dests = wires.setdefault(wire.get_key(),
-                                        (comp.wiring[pin.get_key()],[],[]))
-                    entry = inner_port_map[nid][pin.get_key()], get_wire_slice(wire)
+                    net,nslice = comp.wiring[pin.get_key()]
+                    _,_,sources,dests = wires.setdefault(wire.get_key(), (net,'in',[],[]))
+                    entry = (inner_port_map[nid][pin.get_key()], nslice)
                     dests.append(entry)
-                    if wire.is_constant:
+                    if wire.is_constant and wire.name not in constants:
                         # constant wire; create a source connector for it
-                        netwire = _generate_net_wiring(
-                                comp.wiring[pin.get_key()],
-                                netmap)
+                        # also make sure we have only one constant pad for
+                        # identical constant values
+                        constants.add(wire.name)
+                        netwire = _generate_net_wiring( (net,nslice), netmap)
                         digits = math.ceil(wire.width/4)
                         connector = self._create_connector(
                                 'in',
                                 f'{node.component.name}:{pin.name}',
-                                f'{wire.get_constant_signal().get():{digits}X}',
+                                f'{wire.get_constant_signal().get():0{digits}X}',
                                 type='constant')
                         connector['wire'] = netwire
-                        entry = connector['ports'][0]['id'], get_wire_slice(wire)
+                        entry = (connector['ports'][0]['id'], nslice)
                         sources.append(entry)
                         box['children'].append(connector)
                 for pin in comp.OUT:
                     wire = comp.get_actual_wire(pin.name)
-                    _,sources,_ = wires.setdefault(wire.get_key(),
-                                    (comp.wiring[pin.get_key()],[],[]))
-                    entry = inner_port_map[nid][pin.get_key()], get_wire_slice(wire)
+                    net,nslice = comp.wiring[pin.get_key()]
+                    _,_,sources,_ = wires.setdefault(wire.get_key(), (net,'out',[],[]))
+                    entry = (inner_port_map[nid][pin.get_key()], nslice)
                     sources.append(entry)
             #for w in wires:
+            #    net,dir,sources,dests = wires[w]
             #    print(w)
-            #    sources,dests = wires[w]
+            #    print(' net:', net)
+            #    print(' dir:', dir)
             #    print(' src:', sources)
             #    print(' dst:', dests)
 
             # define edges from all the wire connections generated above
             edges = []
-            for w,(net,sources,dests) in wires.items():
+            for w,(net,dir,sources,dests) in wires.items():
                 # create an edge between source/dest with overlapping slices
-                pairs = [(sport,dport) 
-                           for sport,(sstart,sstop) in sources
-                           for dport,(dstart,dstop) in dests
-                           if sstart < dstop and dstart < sstop]
-
-                for s,d in pairs:
-                    edge = self._create_edge(s,d)
-                    # attach wire's net to help styling
-                    netwire = _generate_net_wiring(net,netmap)
-                    edge['wire'] = netwire
-                    edges.append(edge)
+                for sport,sslice in sources:
+                    sstart,sstop,_ = sslice.indices(net.width)
+                    for dport,dslice in dests:
+                        dstart,dstop,_ = dslice.indices(net.width)
+                        if not(sstart < dstop and dstart < sstop):
+                            continue # not overlapping
+                        edge = self._create_edge(sport,dport)
+                        # attach wire's net to help styling
+                        if dir == 'in':
+                            wslice = dslice
+                        elif dir == 'out':
+                            wslice = sslice
+                        else:
+                            raise Exception('Should not be here')
+                        netwire = _generate_net_wiring((net,wslice),netmap)
+                        edge['wire'] = netwire
+                        edges.append(edge)
 
             # enumerate all edges and give them proper IDs
             for i,edge in enumerate(edges):

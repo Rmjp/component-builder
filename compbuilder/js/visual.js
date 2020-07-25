@@ -163,7 +163,7 @@ function drawChildren(svg,node,component) {
         var offx = 0, offy = 0;
         if (nodeType == "connector" || nodeType == 'constant') {
           // XXX lots of magic here
-          offx = n.direction == "out" ? 10 : 4;
+          offx = n.direction == "out" ? 6 : 4;
           offy = -3;
           nodeType += " " + n.direction;
           nodeType += " " + (n.wire.net.width > 1 ? "bus" : "single");
@@ -236,15 +236,18 @@ function drawNode(svg,node,component) {
 function update(svg,component) {
   svg.selectAll("path.edge")
     .classed("T", function(e) {
-      return signal_width(e.wire) == 1 && e.wire.net.signal;
+      return signal_width(e.wire) == 1 &&
+             component.get_net_signal(e.wire.net, e.wire.slice);
     });
   svg.selectAll("rect.port")
     .classed("T", function(p) {
-      return signal_width(p.wire) == 1 && p.wire.net.signal;
+      return signal_width(p.wire) == 1 &&
+             component.get_net_signal(p.wire.net, p.wire.slice);
     });
   svg.selectAll("path.connector")
     .classed("T", function(c) {
-      return signal_width(c.wire) == 1 && c.wire.net.signal;
+      return signal_width(c.wire) == 1 &&
+             component.get_net_signal(c.wire.net, c.wire.slice);
     });
   svg.selectAll("text.label.connector.out")
     .text(function(c) {

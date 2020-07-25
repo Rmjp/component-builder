@@ -48,7 +48,7 @@ path.edge.hover {
 }
 
 path.bus {
-  stroke: black;
+  stroke-width: 3px;
 }
 
 text.label {
