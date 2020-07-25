@@ -47,6 +47,7 @@ def trace(component, input_signals, probes, step=None, level=None):
         if input_signals == {}:
             if step == None:
                 raise Exception("No simulation steps given")
+            return
         
         signal_lengths = [len(x) for x in input_signals.values()]
         if min(signal_lengths) != max(signal_lengths):
