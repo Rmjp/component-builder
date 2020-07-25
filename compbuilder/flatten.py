@@ -1,6 +1,30 @@
 from collections import deque
 from compbuilder import Component, Wire, w, Signal
 
+def remap_slice(net_width,net_slice,pin_width,pin_slice):
+    '''
+    Remap slice relative to local pin wiring into slice relative to global net
+    >>> remap_slice(1,None,1,None)  # single-bit, default net and pin slices
+    slice(0, 1, None)
+
+    >>> remap_slice(8,None,4,None) # 8-bit net, 4-bit pin, default slices
+    slice(0, 4, None)
+
+    >>> remap_slice(8,slice(0,4),2,slice(0,2))
+    slice(0, 2, None)
+
+    >>> remap_slice(8,slice(4,8),4,slice(0,4))
+    slice(4, 8, None)
+
+    >>> remap_slice(8,slice(4,8),2,slice(2,4))
+    slice(6, 8, None)
+    '''
+    pin_slice = pin_slice or slice(0,pin_width)
+    net_slice = net_slice or slice(0,net_width)
+    offset,_,_ = net_slice.indices(net_width)
+    wstart,wstop,_ = pin_slice.indices(net_width)
+    return slice(wstart+offset, wstop+offset)
+
 ##############################################
 class Net:
     class Connection:
@@ -12,7 +36,7 @@ class Net:
             
         def __repr__(self):
             start,stop,_ = self.slice.indices(self.net.width)
-            return '{}:{} -> {}[{}:{}]'.format(
+            return '{}:{} -> {}[{}..{}]'.format(
                     self.component.name,
                     self.wire,
                     self.net.name,
@@ -79,10 +103,8 @@ def _create_nets(self,outer,netlist,complist,path):
             #print(f'{dir} {outer}:{outer_wire} -> {self}:{w}')
             net,outer_slice = outer.wiring[outer_wire.get_key()]
             #print(outer_wire.slice,outer_slice)
-            wire_slice = outer_wire.slice or slice(0,w.width)
-            offset,_,_ = outer_slice.indices(net.width)
-            wstart,wstop,_ = wire_slice.indices(net.width)
-            net_slice = slice(wstart+offset, wstop+offset)
+            net_slice = remap_slice(net.width, outer_slice,
+                                    outer_wire.width, outer_wire.slice)
         else:
             # This is the outermost component.  Create a new net for each of
             # the inputs/outputs.
@@ -104,7 +126,7 @@ def _create_nets(self,outer,netlist,complist,path):
     if self.PARTS:
         # create a net for each of the internal wires
         for node in self.nodes.values():
-            for w in [*node.in_wires.values(),*node.out_wires.values()]:
+            for i,w in enumerate([*node.in_wires.values(),*node.out_wires.values()]):
                 if w.get_key() not in self.wiring: # internal wires
                     net_name = f'{self.name}:{w.name}'
                     if w.is_constant:
@@ -244,7 +266,10 @@ def wire_repr(self):
         prefix = f'w({self.width})'
     if self.slice:
         start,stop,_ = self.slice.indices(self.width)
-        suffix = f'[{start}:{stop-1}]'
+        if stop == start+1:
+            suffix = f'[{start}]'
+        else:
+            suffix = f'[{start}:{stop-1}]'
     else:
         suffix = ''
     return f'{prefix}.{self.name}{suffix}'

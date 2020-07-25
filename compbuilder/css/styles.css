@@ -48,7 +48,7 @@ path.edge.hover {
 }
 
 path.bus {
-  stroke: black;
+  stroke-width: 3px;
 }
 
 text.label {
@@ -74,4 +74,21 @@ text.label.constant {
   font-family: monospace;
   font-weight: bold;
   font-size: 100%;
+}
+
+div.tooltip {
+  position: absolute;
+  text-align: center;
+  padding: 5px;
+  font: 12px sans-serif;
+  background: white;
+  border: 1px solid darkgrey;
+  border-radius: 5px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+span.signal {
+  color: blue;
+  font-weight: bold;
 }

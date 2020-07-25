@@ -3,7 +3,7 @@ import math
 from copy import deepcopy
 from textwrap import indent,dedent
 import json
-import compbuilder.flatten
+from . import flatten
 
 DEFAULT_LAYOUT_CONFIG = {
     'width' : 60,
@@ -204,7 +204,7 @@ class VisualMixin:
 
     ################
     def _create_edge(self,src,dst):
-        return { 'sources' : [src], "targets" : [dst] }
+        return { 'sources' : [src], 'targets' : [dst] }
 
     ################
     def _generate_elk(self,depth,netmap,base_id=''):
@@ -249,10 +249,11 @@ class VisualMixin:
         for i,(pin,dir) in enumerate(ports):
             port_id = f'{self.name}:{pin.name}'
             elk_port = self._create_port(pin,port_id,i,dir)
-            # attach wire's net to help styling
+            # attach wire's metadata to help styling
             netwire = _generate_net_wiring(self.wiring[pin.get_key()],netmap)
             netwire['name'] = pin.name
             elk_port['wire'] = netwire
+            elk_port['name'] = pin.name
             elk_ports.append(elk_port)
             port_map[pin.get_key()] = elk_port['id']
         box['ports'] = elk_ports
@@ -262,69 +263,89 @@ class VisualMixin:
         if depth > 0 and self.PARTS:
             # maintain a data structure that allows inquiries of an internal
             # wire's source and destination ELK ports by its name and slicing
-            # wires: wire -> (net,[source...],[dest...])
-            # where each source and dest is of the form (ELK-port-id,slice)
+            # wires: wire-key -> (net,dir,[source...],[dest...])
+            # where each source and dest is of the form (wire,ELK-port-id,net-slice)
             wires = {}
             for pin in self.IN:
-                _,sources,_ = wires.setdefault(pin.get_key(), 
-                                (self.wiring[pin.get_key()],[],[]))
-                entry = port_map[pin.get_key()], get_wire_slice(pin)
+                net,nslice = self.wiring[pin.get_key()]
+                _,_,sources,_ = wires.setdefault(pin.get_key(), (net,'in',[],[]))
+                entry = (pin, port_map[pin.get_key()], nslice)
                 sources.append(entry)
             for pin in self.OUT:
-                _,_,dests = wires.setdefault(pin.get_key(),
-                              (self.wiring[pin.get_key()],[],[]))
-                entry = port_map[pin.get_key()], get_wire_slice(pin)
+                net,nslice = self.wiring[pin.get_key()]
+                _,_,_,dests = wires.setdefault(pin.get_key(), (net,'out',[],[]))
+                entry = (pin, port_map[pin.get_key()], nslice)
                 dests.append(entry)
+            constants = set()
             for nid,node in self.nodes.items():
                 comp = node.component
                 for pin in comp.IN:
                     wire = comp.get_actual_wire(pin.name)
-                    _,sources,dests = wires.setdefault(wire.get_key(),
-                                        (comp.wiring[pin.get_key()],[],[]))
-                    entry = inner_port_map[nid][pin.get_key()], get_wire_slice(wire)
+                    net,nslice = comp.wiring[pin.get_key()]
+                    _,_,sources,dests = wires.setdefault(wire.get_key(), (net,'in',[],[]))
+                    entry = (comp.get_actual_wire(pin.name),
+                             inner_port_map[nid][pin.get_key()],
+                             nslice)
                     dests.append(entry)
-                    if wire.is_constant:
+                    if wire.is_constant and wire.name not in constants:
                         # constant wire; create a source connector for it
-                        netwire = _generate_net_wiring(
-                                comp.wiring[pin.get_key()],
-                                netmap)
+                        # also make sure we have only one constant pad for
+                        # identical constant values
+                        constants.add(wire.name)
+                        netwire = _generate_net_wiring( (net,nslice), netmap)
                         digits = math.ceil(wire.width/4)
                         connector = self._create_connector(
                                 'in',
                                 f'{node.component.name}:{pin.name}',
-                                f'{wire.get_constant_signal().get():{digits}X}',
+                                f'{wire.get_constant_signal().get():0{digits}X}',
                                 type='constant')
                         connector['wire'] = netwire
-                        entry = connector['ports'][0]['id'], get_wire_slice(wire)
+                        entry = (wire, connector['ports'][0]['id'], nslice)
                         sources.append(entry)
                         box['children'].append(connector)
                 for pin in comp.OUT:
                     wire = comp.get_actual_wire(pin.name)
-                    _,sources,_ = wires.setdefault(wire.get_key(),
-                                    (comp.wiring[pin.get_key()],[],[]))
-                    entry = inner_port_map[nid][pin.get_key()], get_wire_slice(wire)
+                    net,nslice = comp.wiring[pin.get_key()]
+                    _,_,sources,_ = wires.setdefault(wire.get_key(), (net,'out',[],[]))
+                    entry = (comp.get_actual_wire(pin.name),
+                             inner_port_map[nid][pin.get_key()],
+                             nslice)
                     sources.append(entry)
             #for w in wires:
+            #    net,dir,sources,dests = wires[w]
             #    print(w)
-            #    sources,dests = wires[w]
+            #    print(' net:', net)
+            #    print(' dir:', dir)
             #    print(' src:', sources)
             #    print(' dst:', dests)
 
             # define edges from all the wire connections generated above
             edges = []
-            for w,(net,sources,dests) in wires.items():
+            for net,dir,sources,dests in wires.values():
                 # create an edge between source/dest with overlapping slices
-                pairs = [(sport,dport) 
-                           for sport,(sstart,sstop) in sources
-                           for dport,(dstart,dstop) in dests
-                           if sstart < dstop and dstart < sstop]
-
-                for s,d in pairs:
-                    edge = self._create_edge(s,d)
-                    # attach wire's net to help styling
-                    netwire = _generate_net_wiring(net,netmap)
-                    edge['wire'] = netwire
-                    edges.append(edge)
+                for swire,sport,sslice in sources:
+                    sstart,sstop,_ = sslice.indices(net.width)
+                    for dwire,dport,dslice in dests:
+                        dstart,dstop,_ = dslice.indices(net.width)
+                        if not(sstart < dstop and dstart < sstop):
+                            continue # not overlapping
+                        edge = self._create_edge(sport,dport)
+                        # attach wire's metadata to help styling
+                        if sslice.stop - sslice.start < dslice.stop - dslice.start:
+                            # source's slice is a subset of destination's
+                            wslice = sslice
+                            wire = swire
+                        else:
+                            # destination's slice is a subset of source's
+                            wslice = dslice
+                            wire = dwire
+                        netwire = _generate_net_wiring((net,wslice),netmap)
+                        edge['wire'] = netwire
+                        if wire.is_constant:
+                            edge['name'] = 'const'
+                        else:
+                            edge['name'] = repr(wire)
+                        edges.append(edge)
 
             # enumerate all edges and give them proper IDs
             for i,edge in enumerate(edges):
@@ -408,6 +429,7 @@ class VisualMixin:
             conlink = self._create_edge(connector_id,port_id)
             conlink['id'] = f'CE:{i}'
             conlink['wire'] = netwire
+            conlink['name'] = repr(port)
             conlinks.append(conlink)
 
         return {
@@ -529,11 +551,13 @@ class VisualMixin:
 def interact(component_class,**kwargs):
     import IPython.display as DISP
 
+    # XXX specifying js and css file locations here is very hacky;
+    # please find a better way
     DISP.display_html(DISP.HTML("""
         <script src="https://d3js.org/d3.v5.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/elkjs@0.6.2/lib/elk.bundled.js"></script>
-        <script src="https://www.cpe.ku.ac.th/~cpj/tmp/component.js"></script>
-        <script src="https://www.cpe.ku.ac.th/~cpj/tmp/visual.js"></script>
+        <script src="https://www.cpe.ku.ac.th/~cpj/tmp/component.js?v=20200725-1"></script>
+        <script src="https://www.cpe.ku.ac.th/~cpj/tmp/visual.js?v=20200725-1"></script>
     """))
 
     component = component_class()
@@ -542,7 +566,7 @@ def interact(component_class,**kwargs):
     DISP.display_html(
         DISP.HTML('<script>' + component.generate_js(**kwargs) + '</script>'))
     DISP.display_html(DISP.HTML("""
-        <link rel="stylesheet" type="text/css" href="https://www.cpe.ku.ac.th/~cpj/tmp/styles.css" />
+        <link rel="stylesheet" type="text/css" href="https://www.cpe.ku.ac.th/~cpj/tmp/styles.css?v=20200725-1" />
         <div id="diagram"></div>
         <script>
           compbuilder.create("#diagram",config);

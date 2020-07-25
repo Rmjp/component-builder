@@ -5,6 +5,7 @@ from test.visual_gates import (
         VisualComponent,
         Nand, Not, And, Or, Xor,
         DFF, FullAdder,
+        And8
     )
 
 T = Signal.T
@@ -58,6 +59,28 @@ class TestFlatComponent(unittest.TestCase):
         self.assertEqual(xor.update()['out'], F)
         self.assertEqual(xor.update(a=T)['out'], T)
         self.assertEqual(xor.update(b=T)['out'], F)
+
+################################################
+class And16(VisualComponent):
+    IN = [w(16).a, w(16).b]
+    OUT = [w(16).out]
+    PARTS = [
+        And8(a=w.a[0:8],b=w.b[0:8],out=w.out[0:8]),
+        And8(a=w.a[8:16],b=w.b[8:16],out=w.out[8:16]),
+    ]
+
+class TestRelativeSlice(unittest.TestCase):
+    def setUp(self):
+        self.and16 = And16()
+        self.and16.flatten()
+
+    def test_sequence(self):
+        import random
+        and16 = self.and16
+        for i in range(100):
+            a = random.randint(0,65535)
+            b = random.randint(0,65535)
+            self.assertEqual(and16.update(a=Signal(a,16),b=Signal(b,16))['out'],Signal(a&b,16))
 
 ################################################
 class DualClock(VisualComponent):
