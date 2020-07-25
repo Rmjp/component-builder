@@ -79,7 +79,8 @@ def trace(component, input_signals, probes, step=None, level=None):
     outs = {probe:[] for probe in probes}
     for bits in zip(*input_signals.values()):
         ins = {name:Signal(int(signal),component_wire_map[name].width)
-               for name,signal in zip(input_signals.keys(),bits)}
+               for name,signal in zip(input_signals.keys(),bits)
+               if name in component_wire_map}
         out_signals = component.eval(**ins)
 
         res = {}

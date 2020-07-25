@@ -1,7 +1,7 @@
 import unittest
 
-from compbuilder import Signal
-from test.basic_gates import Nand, Not, And, Or, Xor, HalfAdder, FullAdder
+from compbuilder import Signal, Component, w
+from test.basic_gates import Nand, Not, And, Or, Xor, HalfAdder, FullAdder, DFF
 
 T = Signal.T
 F = Signal.F
@@ -167,6 +167,34 @@ class TestTracing(unittest.TestCase):
                           'Or-5:b': '0100',
                           'Not-5-1:In': '0010',
                           'Not-5-1:out': '1101'})
+
+
+class Inc2(Component):
+    IN = [w(2).In]
+    OUT = [w(2).out]
+
+    PARTS = [
+        FullAdder(a=w.In[0], b=w.one, carry_in=w.zero, s=w.out[0], carry_out=w.carry0),
+        FullAdder(a=w.In[1], b=w.zero, carry_in=w.carry0, s=w.out[1], carry_out=w.carry1),
+    ]
+
+class Counter2(Component):
+    IN = []
+    OUT = [w(2).out]
+
+    PARTS = [
+        DFF(In=w(2).updated_counter[0], out=w.out[0]),
+        DFF(In=w(2).updated_counter[1], out=w.out[1]),
+        Inc2(In=w.out, out=w.updated_counter)
+    ]
+
+class TestTracingEmptyInput(unittest.TestCase):
+    def setUp(self):
+        self.counter2 = Counter2()
+
+    def test_empty(self):
+        output = trace(self.counter2, {}, ['out'], step=20)
+        print(output)
 
 
 if __name__ == '__main__':
