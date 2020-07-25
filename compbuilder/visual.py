@@ -539,11 +539,13 @@ class VisualMixin:
 def interact(component_class,**kwargs):
     import IPython.display as DISP
 
+    # XXX specifying js and css file locations here is very hacky;
+    # please find a better way
     DISP.display_html(DISP.HTML("""
         <script src="https://d3js.org/d3.v5.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/elkjs@0.6.2/lib/elk.bundled.js"></script>
-        <script src="https://www.cpe.ku.ac.th/~cpj/tmp/component.js"></script>
-        <script src="https://www.cpe.ku.ac.th/~cpj/tmp/visual.js"></script>
+        <script src="https://www.cpe.ku.ac.th/~cpj/tmp/component.js?v=20200725-1"></script>
+        <script src="https://www.cpe.ku.ac.th/~cpj/tmp/visual.js?v=20200725-1"></script>
     """))
 
     component = component_class()
@@ -552,7 +554,7 @@ def interact(component_class,**kwargs):
     DISP.display_html(
         DISP.HTML('<script>' + component.generate_js(**kwargs) + '</script>'))
     DISP.display_html(DISP.HTML("""
-        <link rel="stylesheet" type="text/css" href="https://www.cpe.ku.ac.th/~cpj/tmp/styles.css" />
+        <link rel="stylesheet" type="text/css" href="https://www.cpe.ku.ac.th/~cpj/tmp/styles.css?v=20200725-1" />
         <div id="diagram"></div>
         <script>
           compbuilder.create("#diagram",config);
