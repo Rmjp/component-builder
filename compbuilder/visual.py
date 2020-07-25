@@ -374,12 +374,11 @@ class VisualMixin:
         return resolved
 
     ################
-    @classmethod
-    def _generate_part_config(cls):
-        name = cls.__name__
-        inputs = ','.join([f'"{w.name}"' for w in cls.IN])
-        outputs = ','.join([f'"{w.name}"' for w in cls.OUT])
-        if cls.PARTS:
+    def _generate_part_config(component):
+        name = component.get_gate_name()
+        inputs = ','.join([f'"{w.name}"' for w in component.IN])
+        outputs = ','.join([f'"{w.name}"' for w in component.OUT])
+        if component.PARTS:
             return COMPOUND_GATE_JS_TEMPLATE.format(
                 name=name,
                 inputs=inputs,
@@ -387,7 +386,7 @@ class VisualMixin:
             )
         else:
             process = [PROCESS_JS_TEMPLATE.format(pin=k,function=v)
-                        for k,v in cls.process.js.items()]
+                        for k,v in component.process.js.items()]
             return PRIMITIVE_GATE_JS_TEMPLATE.format(
                 name=name,
                 inputs=inputs,
@@ -502,9 +501,9 @@ class VisualMixin:
         lines.append('var comp_config = ' + comp_js + ';')
 
         # main component's wiring and all used primitives
-        used_primitives = set(p.__class__ for p in self.primitives)
+        used_primitives = {p.__class__:p for p in self.primitives}
         part_configs_js = ','.join(p._generate_part_config()
-                for p in [self.__class__]+list(used_primitives))
+                for p in [self]+list(used_primitives.values()))
         lines.append('')
         lines.append('comp_config.part_configs = {' + part_configs_js + '\n};')
 
@@ -546,8 +545,12 @@ def interact(component_class,**kwargs):
         <script src="https://www.cpe.ku.ac.th/~cpj/tmp/component.js"></script>
         <script src="https://www.cpe.ku.ac.th/~cpj/tmp/visual.js"></script>
     """))
+
+    component = component_class()
+    component.init_interact()
+    
     DISP.display_html(
-        DISP.HTML('<script>' + component_class().generate_js(**kwargs) + '</script>'))
+        DISP.HTML('<script>' + component.generate_js(**kwargs) + '</script>'))
     DISP.display_html(DISP.HTML("""
         <link rel="stylesheet" type="text/css" href="https://www.cpe.ku.ac.th/~cpj/tmp/styles.css" />
         <div id="diagram"></div>

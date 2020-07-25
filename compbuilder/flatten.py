@@ -32,7 +32,8 @@ class Net:
             self.component = component  # component attached to this net
             self.wire = wire            # component's port of attachment
             self.slice = net_slice      # part of the net attached to wire
-
+            self.net = net
+            
         def __repr__(self):
             start,stop,_ = self.slice.indices(self.net.width)
             return '{}:{} -> {}[{}..{}]'.format(

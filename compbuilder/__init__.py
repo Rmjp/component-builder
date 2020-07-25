@@ -1,3 +1,5 @@
+from .exceptions import ComponentError, WireError
+
 class Signal:
     """
     >>> s = Signal(26,6)
@@ -264,7 +266,10 @@ class SimulationMixin:
             e['current_in_count'] = 0
                     
         for key in self.get_in_keys():
-            e = self.sim_edges[(self.cid, key)]
+            try:
+                e = self.sim_edges[(self.cid, key)]
+            except KeyError as e:
+                raise ComponentError(errors=e) from e
             for vid in e['dest']:
                 self.sim_nodes[vid].current_indegree -= 1
                     
@@ -297,7 +302,7 @@ class SimulationMixin:
                                 added_set.add(v.id)
 
         if ncount != self.sim_n:
-            raise Exception('Loop in component parts found')
+            raise ComponentError(message='Loop in component parts found')
 
     def get_signal_from_mapped_wire(self, signal, component_wire, mapped_wire):
         offset = mapped_wire['offset']
@@ -306,7 +311,7 @@ class SimulationMixin:
         elif mapped_wire['is_constant']:
             signal_value = mapped_wire['actual_wire'].constant_value
         else:
-            raise Exception('Required input signal not found')
+            raise ComponentError(message='Required input signal not found')
         v = (signal_value) >> offset
         mask = (1 << component_wire.width) - 1
         return Signal(v & mask, 1)
@@ -376,8 +381,10 @@ class SimulationMixin:
             else:
                 component.prepare_process(**input_kwargs)
 
-        return {wire.name:self.edge_values[(self.cid, wire.get_key())] for wire in self.OUT}
-
+        try:
+            return {wire.name:self.edge_values[(self.cid, wire.get_key())] for wire in self.OUT}
+        except KeyError as e:
+            raise ComponentError(errors=e) from e
 
 class Component(SimulationMixin):
     class Node:
@@ -418,9 +425,45 @@ class Component(SimulationMixin):
 
         self.parent_component = None
 
+        self.is_clk_wire_added = False
+
     def shallow_clone(self):
         return type(self)(**self.wire_assignments)
 
+    def init_interact(self):
+        self.initialize()
+        self.add_clk_wire()
+    
+    def add_clk_wire(self):
+        if self.is_clocked_component:
+            if 'clk' not in [w.name for w in self.IN]:
+                self.is_clk_wire_added = True
+                self.IN.append(w.clk)
+
+                self.wire_assignments['clk'] = w.clk
+
+                for node in self.nodes.values():
+                    if node.component.is_clocked_component:
+                        node.in_wires['clk'] = w.clk
+
+                for c in self.internal_components:
+                    c.add_clk_wire()
+
+    def restore_clk_wire(self):
+        if self.is_clk_wire_added:
+            self.IN = [w for w in self.IN if w.name != 'clk']
+
+            del self.wire_assignments['clk']
+
+            for node in self.nodes.values():
+                if node.component.is_clocked_component:
+                    del node.in_wires['clk']
+            
+            for c in self.internal_components:
+                c.restore_clk_wire()
+
+            self.is_clk_wire_added = False
+    
     def get_in_keys(self):
         return [w.get_key() for w in self.IN]
     
@@ -458,7 +501,7 @@ class Component(SimulationMixin):
             if (w.name not in widths) or (widths[w.name] == 1):
                 widths[w.name] = w.width
             elif (w.width != 1) and (widths[w.name] != w.width):
-                raise Exception('Wire width mismatch {} and {}'.format(widths[w.name],w.width))
+                raise ComponentError(message='Wire width mismatch {} and {}'.format(widths[w.name],w.width))
 
         self.IN = [normalize_wire_width(w, widths) for w in self.IN]
         self.OUT = [normalize_wire_width(w, widths) for w in self.OUT]
@@ -560,7 +603,7 @@ class Component(SimulationMixin):
         for wire in self.IN + self.OUT:
             name = wire.name
             if name not in self.wire_assignments:
-                raise Exception('Incomplete wire configuration: ' + name)
+                raise ComponentError(message='Incomplete wire configuration: ' + name)
 
     def initialize(self):
         if self.is_initialized:
@@ -582,9 +625,6 @@ class Component(SimulationMixin):
             print('propagate:', w.name, u.out_dict[estr], wire.name)
 
     def set_constants(self):
-        #if self.get_gate_name() == 'AutoCounter':
-        #    print('=================={}==================='.format(self.get_gate_name()))
-        #    print(self.edges)
         for uid in self.nodes:
             u = self.nodes[uid]
             for w in u.in_wires.values():
@@ -610,7 +650,10 @@ class Component(SimulationMixin):
             output = u.component._process(**input_kwargs)
             self.propagate_output(u, output)
 
-        return {wire.name:self.edges[wire.get_key()]['value'] for wire in self.OUT}
+        try:
+            return {wire.name:self.edges[wire.get_key()]['value'] for wire in self.OUT}
+        except KeyError as e:
+            raise ComponentError(errors=e) from e
 
     def process_deffered(self,**kwargs):
         self.initialize()
@@ -653,11 +696,10 @@ class Component(SimulationMixin):
             
             self.propagate_output(u, output)
 
-        if str(type(self)) == "<class 'test.test_ram.RAM64'>":
-            for e in self.edges:
-                print(e, self.edges[e])
-            
-        return {wire.name:self.edges[wire.get_key()]['value'] for wire in self.OUT}
+        try:
+            return {wire.name:self.edges[wire.get_key()]['value'] for wire in self.OUT}
+        except KeyError as e:
+            raise ComponentError(errors=e) from e
     
     def _process(self, **kwargs):
         for f in self.preprocessing_hooks.values():
@@ -706,7 +748,7 @@ class Component(SimulationMixin):
     def eval_single(self, **kwargs):
         output = self.eval(**kwargs)
         if len(output.keys()) != 1:
-            raise Exception("eval single works only with output with exactly one wire")
+            raise ComponentError(message="eval single works only with output with exactly one wire")
         return list(output.values())[0]
 
     def get_gate_name(self):
@@ -724,19 +766,19 @@ class Component(SimulationMixin):
         if len(index_items) <= 1:
             if self.get_gate_name() == key:
                 return self
-            raise Exception('Internal component access error with key: ' + key)
+            raise ComponentError(message='Internal component access error with key: ' + key)
 
         try:
             indices = [int(x) for x in index_items[1:]]
         except:
-            raise Exception('Internal component access error with key: ' + key)
+            raise ComponentError(message='Internal component access error with key: ' + key)
 
         component = self
         for i in indices:
             component = component.internal_components[i-1]
 
         if component.get_gate_name() != index_items[0]:
-            raise Exception('Internal component access error gate type mismatch: ' + key + ' with ' + component.get_gate_name())
+            raise ComponentError(message='Internal component access error gate type mismatch: ' + key + ' with ' + component.get_gate_name())
 
         return component
     
@@ -779,7 +821,7 @@ class Wire:
 
     def get_constant_signal(self):
         if not self.is_constant:
-            raise Exception('A non-constant wire does not have constant_value')
+            raise WireError(message='A non-constant wire does not have constant_value')
         if self.slice:
             signal = Signal(0, self.width)
             signal.set_slice(self.slice, self.constant_value)
@@ -789,7 +831,7 @@ class Wire:
         
     def save_to_signal(self, signal, value_signal):
         if self.is_constant:
-            raise Exception('Cannot save to constant wires')
+            raise WireError(message='Cannot save to constant wires')
         if self.slice:
             if signal == None:
                 signal = Signal(0, self.width)
