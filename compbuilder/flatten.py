@@ -266,7 +266,10 @@ def wire_repr(self):
         prefix = f'w({self.width})'
     if self.slice:
         start,stop,_ = self.slice.indices(self.width)
-        suffix = f'[{start}:{stop-1}]'
+        if stop == start+1:
+            suffix = f'[{start}]'
+        else:
+            suffix = f'[{start}:{stop-1}]'
     else:
         suffix = ''
     return f'{prefix}.{self.name}{suffix}'

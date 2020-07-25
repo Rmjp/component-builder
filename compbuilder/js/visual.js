@@ -258,6 +258,12 @@ function update(svg,component) {
 
 //////////////////////////////////
 function attach_events(svg,component) {
+
+  // prepare a tooltip box
+  var tooltip = d3.select("body").append("div")
+      .attr("class", "tooltip")
+      .style("opacity", 0);
+
   svg.selectAll(".connector.in")
     .on("mouseover", function(c) {
       d3.select(this).classed("hover",true);
@@ -274,10 +280,24 @@ function attach_events(svg,component) {
     });
   svg.selectAll("path.edge")
     .on("mouseover", function(e) {
+      console.log(e);
       d3.select(this).classed("hover",true);
+      tooltip.transition()
+        .duration(200)
+        .style("opacity", .9);
+      var sigval = component.get_net_signal(e.wire.net, e.wire.slice);
+      tooltip.html("<span class='signal'>" +
+        e.name + " = 0x" + sigval.toString(16).toUpperCase() +
+        "</span>"
+        )
+        .style("left", (d3.event.pageX + 10) + "px")
+        .style("top", (d3.event.pageY + 5) + "px");
     })
     .on("mouseout", function(e) {
       d3.select(this).classed("hover",false);
+      tooltip.transition()
+        .duration(200)
+        .style("opacity", 0);
     })
 }
 
