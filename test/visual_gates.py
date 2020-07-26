@@ -3,6 +3,7 @@ from compbuilder import w
 from compbuilder.visual import VisualMixin
 from compbuilder.visual_layouts import (
     NandLayoutMixin,
+    BufferLayoutMixin,
     NotLayoutMixin,
     AndLayoutMixin,
     OrLayoutMixin,
@@ -26,6 +27,18 @@ class Nand(NandLayoutMixin,VisualComponent):
             return {'out': Signal(1)}
     process.js = {
         'out' : 'function(w) { return (w.a==1) && (w.b==1) ? 0 : 1; }',
+    }
+
+
+class Buffer(BufferLayoutMixin,VisualComponent):
+    IN = [w.In]
+    OUT = [w.out]
+    PARTS = []
+
+    def process(self, In):
+        return {'out': Signal(In.get())}
+    process.js = {
+        'out' : 'function(w) { return w.In; }',
     }
 
 

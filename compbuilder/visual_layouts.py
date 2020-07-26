@@ -42,6 +42,26 @@ class NotLayoutMixin:
     }
 
 
+class BufferLayoutMixin:
+    LAYOUT_CONFIG = {
+        'width' : 30,
+        'height' : 40,
+        'port_width' : 0,
+        'port_height' : 0,
+        'label' : '',
+        'ports' : {  # hide all port labels
+            'In' : {'label' : ''},
+            'out' : {'label' : ''},
+        },
+        'svg' : """
+            <path d="M 0,0
+                     l 30,20
+                     l -30,20
+                     z" />
+        """,
+    }
+
+
 class AndLayoutMixin:
     LAYOUT_CONFIG = {
         'width' : 40,
