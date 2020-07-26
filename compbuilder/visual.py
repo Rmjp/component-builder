@@ -342,7 +342,7 @@ class VisualMixin:
                         netwire = _generate_net_wiring((net,wslice),netmap)
                         edge['wire'] = netwire
                         if wire.is_constant:
-                            edge['name'] = 'const'
+                            edge['name'] = f'const({wire.width})'
                         else:
                             edge['name'] = repr(wire)
                         edges.append(edge)
