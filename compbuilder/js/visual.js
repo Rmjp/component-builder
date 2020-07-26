@@ -280,7 +280,6 @@ function attach_events(svg,component) {
     });
   svg.selectAll("path.edge")
     .on("mouseover", function(e) {
-      console.log(e);
       d3.select(this).classed("hover",true);
       tooltip.transition()
         .duration(200)

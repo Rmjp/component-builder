@@ -83,6 +83,48 @@ class TestRelativeSlice(unittest.TestCase):
             self.assertEqual(and16.update(a=Signal(a,16),b=Signal(b,16))['out'],Signal(a&b,16))
 
 ################################################
+class Buffer(VisualComponent):
+  IN = [w.In]
+  OUT = [w.out]
+
+  PARTS = [
+      And(a=w.In, b=w.one, out=w.out),
+  ]
+
+class ChainedDFF(VisualComponent):
+    IN = [w.In, w.clk]
+    OUT = [w.out1, w.out2, w.out3]
+
+    PARTS = [
+        Buffer(In=w.In, out=w.out1),
+        DFF(In=w.In, out=w.out2, clk=w.clk),
+        DFF(In=w.out2, out=w.out3, clk=w.clk),
+    ]
+
+class TestFlatChainedDFF(unittest.TestCase):
+    def setUp(self):
+        self.comp = ChainedDFF()
+        self.comp.flatten()
+
+    def test_sequence(self):
+        comp = self.comp
+        comp.update(In=F,clk=F)
+        self.assertEqual(comp.update(clk=T),{'out1':F, 'out2':F, 'out3':F})
+        comp.update(In=T)
+        self.assertEqual(comp.update(clk=F),{'out1':T, 'out2':F, 'out3':F})
+        self.assertEqual(comp.update(clk=T),{'out1':T, 'out2':T, 'out3':F})
+        self.assertEqual(comp.update(clk=F),{'out1':T, 'out2':T, 'out3':F})
+        self.assertEqual(comp.update(clk=T),{'out1':T, 'out2':T, 'out3':T})
+
+        comp.update(In=F)
+        self.assertEqual(comp.update(clk=F),{'out1':F, 'out2':T, 'out3':T})
+        self.assertEqual(comp.update(clk=T),{'out1':F, 'out2':F, 'out3':T})
+        self.assertEqual(comp.update(clk=F),{'out1':F, 'out2':F, 'out3':T})
+        self.assertEqual(comp.update(clk=T),{'out1':F, 'out2':F, 'out3':F})
+        self.assertEqual(comp.update(clk=F),{'out1':F, 'out2':F, 'out3':F})
+
+
+################################################
 class DualClock(VisualComponent):
     IN = [w.In,w.clk1,w.clk2]
     OUT = [w.out]

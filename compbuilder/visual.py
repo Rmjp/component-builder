@@ -490,6 +490,7 @@ class VisualMixin:
                     })
             nets.append({
                 'name' : net.name,
+                'level' : net.level,
                 'width' : net.width,
                 'signal' : net.signal.get(),
                 'sources' : sources,
@@ -529,18 +530,6 @@ class VisualMixin:
         lines.append('var graph = '
                 + json.dumps(elk,indent=indent)
                 + ';')
-
-        ## create mapping from ELK's node id to corresponding component
-        #lines.append('')
-        #lines.append('var node_map = {}')
-        #node_map = {}
-        #self._generate_node_map(elk['children'][0],node_map,'component')
-        ## create the mapping for the root component manually
-        #node_map[elk['children'][0]['id']] = 'component'
-        #node_map['root'] = 'component'
-
-        #for k,v in node_map.items():
-        #    lines.append(f'node_map.{k} = {v}')
 
         lines.append('')
         lines.append('var config = {component: component, graph: graph};');

@@ -47,7 +47,8 @@ class Net:
     def __init__(self,name,width,signal=None):
         self.name = name
         self.width = width
-        self.signal = signal  # current signal value of the net
+        self.signal = signal # current signal value of the net
+        self.transient_signal = Signal(0,width) # signal's transient state
         self.sources = []     # connections to the signal sources of this net
         self.targets = []     # connections to all targets on this net
         self.prelist = set()  # set of prerequisites
@@ -168,7 +169,9 @@ def topsort_nets(self):
 
     # start with inputs, constant wires, and latches
     unexplored.extend(self.wiring[w.get_key()][0] for w in self.IN)
+    #print('unexplored init1:',unexplored)
     unexplored.extend(net for net in self.netlist if net.signal is not None)
+    #print('unexplored init2:',unexplored)
     for p in self.primitives:
         for latch in p.LATCH:
             unexplored.append(p.wiring[latch.get_key()][0])
@@ -194,10 +197,15 @@ def topsort_nets(self):
 def trigger(self):
     '''
     Trigger this primitive part by processing values from input nets and
-    store results in output nets.
+    store results in output nets.  To avoid race conditions, the trigger
+    process stores results in transient net signals (which must have already
+    been prepared).  The new signals must later on be copied over the current
+    signals before triggering the components attached to the nets in the next
+    topological level.  Return a set of affected nets.
     '''
     if self.PARTS:
         raise Exception('This must be called by a primitive component only')
+    affected = set()
     inputs = {}
     for w in self.IN:
         net,nslice = self.wiring[w.get_key()]
@@ -207,8 +215,9 @@ def trigger(self):
         signal = outputs[k.name]
         estr = k.get_key()
         net,nslice = self.wiring[estr]
-        net.signal = net.signal or Signal(0,net.width)
-        net.signal.set_slice(nslice,signal)
+        net.transient_signal.set_slice(nslice,signal)
+        affected.add(net)
+    return affected
 
 ##############################################
 def update(self,**inputs):
@@ -224,11 +233,23 @@ def update(self,**inputs):
 
     # populate the remaining nets by their topological ordering
     # (netlist must have already been topologically sorted)
+    current_level = 0
+    transient_nets = set()
     for net in self.netlist:
+        if net.level != current_level:
+            # new level -- update previous-level nets with their transient
+            # signals
+            for tnet in transient_nets:
+                tnet.signal.value = tnet.transient_signal.value
+            transient_nets.clear()
+            current_level = net.level
         for component in [s.component for s in net.sources]:
-            if component.PARTS: # only consider primitives
-                continue
-            component.trigger()
+            if not component.PARTS: # trigger primitives only
+                affected = component.trigger()
+                transient_nets.update(affected)
+    # update from the transient signals in the final level
+    for tnet in transient_nets:
+        tnet.signal.value = tnet.transient_signal.value
 
     # extract outputs
     outputs = {}
