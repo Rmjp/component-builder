@@ -302,7 +302,13 @@ class SimulationMixin:
                                 added_set.add(v.id)
 
         if ncount != self.sim_n:
-            raise ComponentError(message='Loop in component parts found')
+            messages = ['Loop in component parts found.  Remaining components:']
+            for uid in self.sim_nodes:
+                u = self.sim_nodes[uid]
+                if u.id not in added_set:
+                    messages.append(f'- {u.id}: {u.component}')
+            
+            raise ComponentError(message='\n'.join(messages))
 
     def get_signal_from_mapped_wire(self, signal, component_wire, mapped_wire):
         offset = mapped_wire['offset']

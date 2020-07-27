@@ -1,5 +1,5 @@
 class ComponentError(Exception):
-    def __init__(self, errors, message=''):
+    def __init__(self, errors=None, message=''):
         self.message = f"Wire {errors} does not exists in graph. Wire initialized must be used."\
             if message == '' else message
         self.errors = errors

@@ -194,7 +194,6 @@ class TestTracingEmptyInput(unittest.TestCase):
 
     def test_empty(self):
         output = trace(self.counter2, {}, ['out'], step=20)
-        print(output)
 
 
 if __name__ == '__main__':
