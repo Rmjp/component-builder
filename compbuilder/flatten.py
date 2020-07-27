@@ -216,11 +216,12 @@ def trigger(self):
         estr = k.get_key()
         net,nslice = self.wiring[estr]
         net.transient_signal.set_slice(nslice,signal)
-        affected.add(net)
+        if net.transient_signal.value != net.signal.value:
+            affected.add(net)
     return affected
 
 ##############################################
-def update(self,**inputs):
+def update_full(self,**inputs):
     '''
     Update net signals with the specified input changes.  Return output
     signals.
@@ -260,6 +261,60 @@ def update(self,**inputs):
     return outputs
 
 ##############################################
+def update(self,**inputs):
+    '''
+    Optimally update net signals with the specified input changes.  Return output
+    signals.
+    '''
+    import heapq
+    dirty = []
+    transient_nets = set()
+    # populate input nets
+    for w in self.IN:
+        if w.name in inputs:
+            net,_ = self.wiring[w.get_key()]
+            net.transient_signal = inputs[w.name]
+            transient_nets.add(net)
+            for affected_net in net.postlist:
+                heapq.heappush(dirty, affected_net)
+
+    # populate the remaining nets by their topological ordering
+    # (netlist must have already been topologically sorted)
+    current_level = 0
+    seen = set()
+    while dirty:
+        net = heapq.heappop(dirty)
+        if net in seen:
+            continue
+        else:
+            seen.add(net)
+        if net.level != current_level:
+            # new level -- update previous-level nets with their transient
+            # signals
+            for tnet in transient_nets:
+                tnet.signal.value = tnet.transient_signal.value
+            transient_nets.clear()
+            current_level = net.level
+        for component in [s.component for s in net.sources]:
+            if not component.PARTS: # trigger primitives only
+                changes = component.trigger()
+                transient_nets.update(changes)
+                for change in changes:
+                    for affected_net in change.postlist:
+                        heapq.heappush(dirty,affected_net)
+    # update from the transient signals in the final level
+    for tnet in transient_nets:
+        tnet.signal.value = tnet.transient_signal.value
+
+    # extract outputs
+    outputs = {}
+    for w in self.OUT:
+        net,_ = self.wiring[w.get_key()]
+        outputs[w.name] = net.signal
+
+    return outputs
+
+##############################################
 def flatten(self):
     if hasattr(self,'netlist'):
         return
@@ -272,7 +327,7 @@ def flatten(self):
     for net in self.netlist:
         if net.signal is None:
             net.signal = Signal(0,net.width)
-    self.update()
+    self.update_full()
 
 ##############################################
 def component_repr(self):
@@ -320,6 +375,7 @@ setattr(Component,'flatten',flatten)
 setattr(Component,'_create_nets',_create_nets)
 setattr(Component,'create_nets',create_nets)
 setattr(Component,'update',update)
+setattr(Component,'update_full',update_full)
 setattr(Component,'topsort_nets',topsort_nets)
 setattr(Component,'trigger',trigger)
 setattr(Wire,'__repr__',wire_repr)
