@@ -624,8 +624,8 @@ class Component(SimulationMixin):
             if name not in self.wire_assignments:
                 raise ComponentError(message='Incomplete wire configuration: ' + name)
 
-            if self.wire_assignments[name].width != wire.width:
-                raise ComponentError(message=f'Wire width mismatch in {name}: required {wire.width}, actual {self.wire_assignments[name].width}')
+            if self.wire_assignments[name].get_actual_wire_width() != wire.width:
+                raise ComponentError(message=f'Wire width mismatch in {name}: required {wire.width}, actual {self.wire_assignments[name].get_actual_wire_width()} at component {self}')
 
     def initialize(self):
         if self.is_initialized:
@@ -835,6 +835,15 @@ class Wire:
         else:
             return Wire(self.name, self.width, slice(key,key+1), self.constant_value)
 
+    def get_actual_wire_width(self):
+        if not self.slice:
+            return self.width
+        else:
+            if self.slice.start:
+                return self.slice.stop - self.slice.start
+            else:
+                return self.slice.stop
+        
     def slice_signal(self, signal):
         if self.slice:
             return signal.slice(self.slice)

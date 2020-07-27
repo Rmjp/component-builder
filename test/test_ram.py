@@ -221,7 +221,7 @@ def gen_fast_ram_component(address_size):
 
     return FastRAM
 
-FastRAM8 = gen_fast_ram_component(6)
+FastRAM8 = gen_fast_ram_component(3)
 
 class RAM64(Component):
     IN = [w(16).In, w(6).address, w.load]
