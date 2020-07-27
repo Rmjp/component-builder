@@ -624,6 +624,9 @@ class Component(SimulationMixin):
             if name not in self.wire_assignments:
                 raise ComponentError(message='Incomplete wire configuration: ' + name)
 
+            if self.wire_assignments[name].width != wire.width:
+                raise ComponentError(message=f'Wire width mismatch in {name}: required {wire.width}, actual {self.wire_assignments[name].width}')
+
     def initialize(self):
         if self.is_initialized:
             return
