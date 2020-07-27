@@ -98,6 +98,12 @@ class SimulationMixin:
             self.is_input_node = False
             self.is_output_node = False
 
+        def get_top_level_component(self):
+            c = self.component
+            while c.parent_component != None:
+                c = c.parent_component
+            return c
+
     def extract_nets(self):
         self.initialize()
         
@@ -306,7 +312,7 @@ class SimulationMixin:
             for uid in self.sim_nodes:
                 u = self.sim_nodes[uid]
                 if u.id not in added_set:
-                    messages.append(f'- {u.id}: {u.component}')
+                    messages.append(f'- {u.id}: {u.component} (inside {u.get_top_level_component()})')
             
             raise ComponentError(message='\n'.join(messages))
 
