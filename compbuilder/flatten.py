@@ -261,6 +261,8 @@ def update(self,**inputs):
 
 ##############################################
 def flatten(self):
+    if hasattr(self,'netlist'):
+        return
     self.netlist, self.primitives = self.create_nets()
     self.topsort_nets()
     self.netlist.sort()
@@ -296,6 +298,21 @@ def wire_repr(self):
     else:
         suffix = f'[{start}..{stop-1}]'
     return f'{prefix}.{self.name}{suffix}'
+
+##############################################
+def report(cls_or_instance):
+    from collections import Counter
+    if isinstance(cls_or_instance,type):
+        comp = cls_or_instance()
+    else:
+        comp = cls_or_instance
+    comp.flatten()
+    counter = Counter([p.get_gate_name() for p in comp.primitives])
+    print(f'Total primitives: {len(comp.primitives)}')
+    for gate,count in counter.items():
+        print(f'  - {count} {gate}(s)')
+    print(f'Total nets: {len(comp.netlist)}')
+    print(f'Longest path length: {comp.netlist[-1].level}')
 
 ##############################################
 setattr(Component,'__repr__',component_repr)
