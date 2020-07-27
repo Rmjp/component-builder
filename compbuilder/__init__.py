@@ -314,7 +314,7 @@ class SimulationMixin:
             for uid in self.sim_nodes:
                 u = self.sim_nodes[uid]
                 if u.id not in added_set:
-                    messages.append(f'- {u.id}: {u.component} (inside {u.get_top_level_component()}) in_mapped_wires: {u.in_mapped_wires}')
+                    messages.append(f'- {u.id}: {u.component} (inside {u.get_top_level_component()}) in-wires: {[w["key"] for w in u.in_mapped_wires]}')
 
             messages.append('All top level components:')
             for c in self.internal_components:
