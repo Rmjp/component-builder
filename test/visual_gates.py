@@ -25,7 +25,8 @@ class Nand(NandLayoutMixin,VisualComponent):
             return {'out': Signal(0)}
         else:
             return {'out': Signal(1)}
-    process.js = {
+    process_interact = process
+    process_interact.js = {
         'out' : 'function(w) { return (w.a==1) && (w.b==1) ? 0 : 1; }',
     }
 
@@ -37,7 +38,8 @@ class Buffer(BufferLayoutMixin,VisualComponent):
 
     def process(self, In):
         return {'out': Signal(In.get())}
-    process.js = {
+    process_interact = process
+    process_interact.js = {
         'out' : 'function(w) { return w.In; }',
     }
 
@@ -155,13 +157,24 @@ class DFF(VisualComponent):
         self._clk = Signal(0) 
         self._out = Signal(0)
         self.is_clocked_component = True
+        self.saved_input_kwargs = None
     
-    def process(self,In,clk):
+    def process(self, In=None):
+        if self.saved_input_kwargs == None:
+            self.saved_output = {'out': Signal(0)}
+        else:
+            self.saved_output = {'out': self.saved_input_kwargs['In']}
+        return self.saved_output
+
+    def prepare_process(self, In):
+        self.saved_input_kwargs = {'In': In}
+
+    def process_interact(self,In,clk):
         if self._clk.get() == 0 and clk.get() == 1:
             self._out = In
         self._clk = clk
         return {'out':self._out}
-    process.js = {
+    process_interact.js = {
         'out' : '''
             function(w,s) { // wires,states
               if (s.clk == 0 && w.clk == 1)

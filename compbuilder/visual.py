@@ -211,12 +211,12 @@ class VisualMixin:
         self.config = deepcopy(DEFAULT_LAYOUT_CONFIG)
         # override with component's layout configuration (if exists) when it
         # is a primitive component or it is shown without internal components
-        if (not self.PARTS or depth == 0) and hasattr(self,"LAYOUT_CONFIG"):
+        if (self.is_js_primitive() or depth == 0) and hasattr(self,"LAYOUT_CONFIG"):
             self.config.update(self.LAYOUT_CONFIG)
 
         # port_map maintain mapping of (node-id,wire,slice) -> (ELK port-id)
         inner_port_map = {}
-        if depth == 0 or not self.PARTS: # just create an IC box
+        if depth == 0 or self.is_js_primitive(): # just create an IC box
             if 'height' not in self.config:
                 # determine component's height from the maximum number of
                 # ports on each side
@@ -260,7 +260,7 @@ class VisualMixin:
 
         # when internal components are shown, also add edges to represent
         # internal wiring
-        if depth > 0 and self.PARTS:
+        if depth > 0 and not self.is_js_primitive():
             # maintain a data structure that allows inquiries of an internal
             # wire's source and destination ELK ports by its name and slicing
             # wires: wire-key -> (net,dir,[source...],[dest...])
@@ -365,31 +365,11 @@ class VisualMixin:
         return box, port_map
 
     ################
-    def _resolve_dependencies(self):
-        unexplored = [self.__class__]
-        resolved = []
-        resolved_set = set()
-        while unexplored:
-            comp = unexplored[-1]
-            if comp in resolved_set: # it may have already been resolved
-                unexplored.pop()
-                continue
-            deps = set(c.__class__ for c in comp.PARTS
-                                   if c.__class__ not in resolved_set)
-            if deps:
-                unexplored.extend(deps)
-            else:  # comp's dependencies already resolved
-                resolved.append(comp)
-                resolved_set.add(comp)
-                unexplored.pop()
-        return resolved
-
-    ################
     def _generate_part_config(component):
         name = component.get_gate_name()
         inputs = ','.join([f'"{w.name}"' for w in component.IN])
         outputs = ','.join([f'"{w.name}"' for w in component.OUT])
-        if component.PARTS:
+        if not component.is_js_primitive():
             return COMPOUND_GATE_JS_TEMPLATE.format(
                 name=name,
                 inputs=inputs,
@@ -397,7 +377,7 @@ class VisualMixin:
             )
         else:
             process = [PROCESS_JS_TEMPLATE.format(pin=k,function=v)
-                        for k,v in component.process.js.items()]
+                        for k,v in component.process_interact.js.items()]
             return PRIMITIVE_GATE_JS_TEMPLATE.format(
                 name=name,
                 inputs=inputs,
@@ -503,6 +483,10 @@ class VisualMixin:
             'nets': nets,
         }
         return config
+
+    ##############################################
+    def is_js_primitive(self):
+        return hasattr(self,'process_interact')
 
     ################
     def generate_js(self,indent=None,depth=0,**kwargs):

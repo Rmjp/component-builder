@@ -1,8 +1,9 @@
 import unittest
 
-from compbuilder import Signal, Component, w
+from compbuilder import Signal, w
+from compbuilder.visual import VisualMixin
 from test.visual_gates import (
-        VisualComponent,
+        VisualComponent as Component,
         Nand, Not, And, Or, Xor,
         DFF, FullAdder,
         And8
@@ -61,7 +62,7 @@ class TestFlatComponent(unittest.TestCase):
         self.assertEqual(xor.update(b=T)['out'], F)
 
 ################################################
-class And16(VisualComponent):
+class And16(Component):
     IN = [w(16).a, w(16).b]
     OUT = [w(16).out]
     PARTS = [
@@ -83,7 +84,7 @@ class TestRelativeSlice(unittest.TestCase):
             self.assertEqual(and16.update(a=Signal(a,16),b=Signal(b,16))['out'],Signal(a&b,16))
 
 ################################################
-class Buffer(VisualComponent):
+class Buffer(Component):
   IN = [w.In]
   OUT = [w.out]
 
@@ -91,7 +92,7 @@ class Buffer(VisualComponent):
       And(a=w.In, b=w.one, out=w.out),
   ]
 
-class ChainedDFF(VisualComponent):
+class ChainedDFF(Component):
     IN = [w.In, w.clk]
     OUT = [w.out1, w.out2, w.out3]
 
@@ -125,7 +126,7 @@ class TestFlatChainedDFF(unittest.TestCase):
 
 
 ################################################
-class DualClock(VisualComponent):
+class DualClock(Component):
     IN = [w.In,w.clk1,w.clk2]
     OUT = [w.out]
     PARTS = [
@@ -147,7 +148,7 @@ class TestFlatClockedComponent(unittest.TestCase):
         self.assertEqual(comp.update(clk1=F)['out'],T)
 
 ################################################
-class Div2(VisualComponent):
+class Div2(Component):
     IN = [w.clk]
     OUT = [w.out]
     PARTS = [
@@ -155,7 +156,7 @@ class Div2(VisualComponent):
         Not(In=w.out,out=w.out1),
     ]
 
-class Div4(VisualComponent):
+class Div4(Component):
     IN = [w.clk]
     OUT = [w.out]
     PARTS = [
@@ -201,7 +202,7 @@ class TestFlatLoopedComponent(unittest.TestCase):
             self.assertEqual(div4.update(clk=F)['out'],F)
 
 ################################################
-class Mem8(VisualComponent):
+class Mem8(Component):
     IN = [w(8).In, w.clk]
     OUT = [w(8).out]
     PARTS = [
@@ -232,14 +233,14 @@ class TestFlatMultibitDFF(unittest.TestCase):
             self.assertEqual(mem.update(clk=T)['out'],Signal(i,8))
 
 ################################################
-class NotByConst(VisualComponent):
+class NotByConst(Component):
     IN = [w.In]
     OUT = [w.out]
     PARTS = [
         Nand(a=w.In, b=w.one, out=w.out),
     ]
 
-class AndByConst(VisualComponent):
+class AndByConst(Component):
     IN = [w.a, w.b]
     OUT = [w.out]
     PARTS = [
@@ -265,7 +266,7 @@ class TestFlatConstant(unittest.TestCase):
         self.assertEqual(and1.update(a=T,b=T)['out'],T)
 
 ################################################
-class Mem8NoClk(VisualComponent):
+class Mem8NoClk(Component):
     IN = [w(8).In]
     OUT = [w(8).out]
     PARTS = [

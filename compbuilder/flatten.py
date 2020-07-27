@@ -116,7 +116,7 @@ def _create_nets(self,outer,netlist,complist,path):
 
         # only keep track of connections for outermost and innermost
         # components, i.e., external inputs/outputs and primitive components
-        if not self.PARTS:  # primitive component
+        if self.is_js_primitive():  # primitive component
             net.add_connection(self,w,dir,net_slice)
         if outer is None:   # whole component
             # swap in/out because external inputs serve as outputs for
@@ -124,7 +124,7 @@ def _create_nets(self,outer,netlist,complist,path):
             dir_swap = 'in' if dir == 'out' else 'out'
             net.add_connection(self,w,dir_swap,net_slice)
 
-    if self.PARTS:
+    if not self.is_js_primitive():
         # create a net for each of the internal wires
         for node in self.nodes.values():
             for i,w in enumerate([*node.in_wires.values(),*node.out_wires.values()]):
@@ -203,14 +203,14 @@ def trigger(self):
     signals before triggering the components attached to the nets in the next
     topological level.  Return a set of affected nets.
     '''
-    if self.PARTS:
+    if not self.is_js_primitive():
         raise Exception('This must be called by a primitive component only')
     affected = set()
     inputs = {}
     for w in self.IN:
         net,nslice = self.wiring[w.get_key()]
         inputs[w.name] = net.signal[nslice]
-    outputs = self.process(**inputs)
+    outputs = self.process_interact(**inputs)
     for k in self.OUT:
         signal = outputs[k.name]
         estr = k.get_key()
@@ -245,7 +245,7 @@ def update_full(self,**inputs):
             transient_nets.clear()
             current_level = net.level
         for component in [s.component for s in net.sources]:
-            if not component.PARTS: # trigger primitives only
+            if component.is_js_primitive(): # trigger primitives only
                 affected = component.trigger()
                 transient_nets.update(affected)
     # update from the transient signals in the final level
@@ -296,7 +296,7 @@ def update(self,**inputs):
             transient_nets.clear()
             current_level = net.level
         for component in [s.component for s in net.sources]:
-            if not component.PARTS: # trigger primitives only
+            if component.is_js_primitive(): # trigger primitives only
                 changes = component.trigger()
                 transient_nets.update(changes)
                 for change in changes:

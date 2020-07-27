@@ -1,12 +1,15 @@
 import unittest
 
-from compbuilder import Signal, Component, w
+from compbuilder import Signal, w
+import compbuilder.flatten
+from compbuilder.visual import VisualMixin
 from test.visual_gates import (
-        VisualComponent,
+        VisualComponent as Component,
         Nand, Buffer, Not, And, Or, Xor,
         DFF, FullAdder,
         And8
     )
+from test.test_ram import TestRAMBase
 
 T = Signal.T
 F = Signal.F
@@ -99,7 +102,7 @@ class DMux8Way(Component):
         DMux4Way(In=w.o2, sel=w.sel[:2], a=w.e, b=w.f, c=w.g, d=w.h)
     ]
 
-class Bit(VisualComponent):
+class Bit(Component):
     IN = [w.In, w.load, w.clk]
     OUT = [w.out]
 
@@ -108,7 +111,7 @@ class Bit(VisualComponent):
         DFF(In=w.data, out=w.out, clk=w.clk)
     ]
 
-class Register(VisualComponent):
+class Register(Component):
     IN = [w(16).In, w.load, w.clk]
     OUT = [w(16).out]
 
@@ -124,7 +127,7 @@ class Register(VisualComponent):
                 Bit(In=w.In[i], load=w.load, out=w.out[i], clk=w.clk)
             )
 
-class RAM8(VisualComponent):
+class RAM8(Component):
     IN = [w(16).In, w(3).address, w.load, w.clk]
     OUT = [w(16).out]
 
@@ -202,15 +205,182 @@ class TestFlatRAM64(unittest.TestCase):
         from random import randint
         ram = self.ram
 
-        rands = {}
-        for i in range(10):
-            addr = randint(0,63)
-            data = randint(0,65535)
-            rands[addr] = data
+        contents = {
+            0: 0x1234,
+            1: 0xFFFF,
+        }
+        for addr,data in contents.items():
             ram.update(clk=F)
             ram.update(address=Signal(addr,6),In=Signal(data,16),load=T)
             ram.update(clk=T)
             ram.update(clk=F)
 
-        for addr,data in rands.items():
+        for addr,data in contents.items():
             self.assertEqual(ram.update(address=Signal(addr,6))['out'],Signal(data,16))
+
+#####################################
+def gen_fast_ram_component(name,address_size):
+
+    class FastRAMOutput(Component):
+        IN = [w(16).In, w(address_size).address, w.load, w.latch_link]
+        OUT = [w(16).out]
+
+        PARTS = []
+
+        def shallow_clone(self):
+            return type(self)(self.buffer, **self.wire_assignments)
+
+        def __init__(self, buffer, **kwargs):
+            super(FastRAMOutput, self).__init__(**kwargs)
+            self.buffer = buffer
+
+        def process(self, In, address, load, latch_link):
+            return {'out': Signal(self.buffer[address.get()], 16)}
+
+
+    class FastRAMLatch(Component):
+        IN = [w(16).In, w(address_size).address, w.load]
+        OUT = [w.latch_link]
+
+        PARTS = []
+
+        def shallow_clone(self):
+            return type(self)(self.buffer, **self.wire_assignments)
+
+        def __init__(self, buffer, **kwargs):
+            super(FastRAMLatch, self).__init__(**kwargs)
+            self.buffer = buffer
+            self.is_clocked_component = True
+            self.saved_input_kwargs = None
+
+        def process(self):
+            if self.saved_input_kwargs:
+                if self.saved_input_kwargs['load'].get() == 1:
+                    address = self.saved_input_kwargs['address']
+                    In = self.saved_input_kwargs['In']
+                    self.buffer[address.get()] = In.get()
+
+            return {'latch_link': Signal(0)}
+
+        def prepare_process(self, **kwargs):
+            self.saved_input_kwargs = kwargs
+
+    class FastRAM(Component):
+        IN = [w(16).In, w(address_size).address, w.load]
+        OUT = [w(16).out]
+
+        TRIGGER = [w(address_size).address, w.clk]
+        LATCH = [w(16).out]
+
+        PARTS = None
+
+        def __init__(self, **kwargs):
+            super(FastRAM, self).__init__(**kwargs)
+            self.buffer = [0] * (2 ** address_size)
+
+            self.PARTS = [
+                FastRAMOutput(self.buffer,
+                               In=w.In, address=w.address, load=w.load,
+                               out=w.out,
+                               latch_link=w.dummy),
+                FastRAMLatch(self.buffer, In=w.In, address=w.address, load=w.load,
+                              latch_link=w.dummy),
+            ]
+
+            # for interactive counterpart
+            self._clk = Signal(0) 
+            self._contents = {}
+            self.is_clocked_component = True
+
+        def process_interact(self,In,address,load,clk):
+            if self._clk.get() == 0 and clk.get() == 1 and load.get() == 1:
+                self._contents[address.get()] = In
+            self._clk = clk
+            return {'out': self._contents.get(address.get(),Signal(0,16))}
+
+        process_interact.js = {
+            'out' : '''
+                function(w,s) { // wires,states
+                  s._contents = s._contents || {};
+                  if (s.clk == 0 && w.clk == 1 && w.load == 1) {
+                    s._contents[w.address] = w.In;
+                  }
+                  s.clk = w.clk;
+                  return s._contents[w.address] || 0;
+                }''',
+        }
+
+    FastRAM.__name__ = name
+    return FastRAM
+
+FastRAM8 = gen_fast_ram_component('FastRAM8',3)
+class TestFastRAM8(unittest.TestCase):
+    def setUp(self):
+        self.ram = FastRAM8()
+        self.ram.initialize()
+        self.ram.add_clk_wire()
+        self.ram.flatten()
+
+    def test_sequence(self):
+        ram = self.ram
+        contents = {
+            0: 0x1234,
+            1: 0xFFFF,
+            2: 0x0000,
+            3: 0x5555,
+            4: 0xABCD,
+            5: 0x0001,
+            6: 0xFFFE,
+            7: 0xAAAA,
+        }
+        for addr,data in contents.items():
+            ram.update(clk=F)
+            ram.update(In=Signal(data,16),address=Signal(addr,3),load=T)
+            ram.update(clk=T)
+            ram.update(clk=F)
+
+        for addr,data in contents.items():
+            self.assertEqual(ram.update(address=Signal(addr,3))['out'],Signal(data,16))
+
+#####################################
+FastRAM16K = gen_fast_ram_component('FastRAM16K',14)
+class TestFastRAM16K(unittest.TestCase):
+    def setUp(self):
+        self.ram = FastRAM16K()
+        self.ram.initialize()
+        self.ram.add_clk_wire()
+        self.ram.flatten()
+
+    def test_sequence(self):
+        ram = self.ram
+        contents = {
+            0x0000: 0x1111,
+            0x0001: 0x2222,
+            0x0FFE: 0x3333,
+            0x0FFF: 0x4444,
+            0x1000: 0x5555,
+            0x1001: 0x6666,
+            0x1FFE: 0x7777,
+            0x1FFF: 0x8888,
+            0x2000: 0x9999,
+            0x2001: 0xAAAA,
+            0x2FFE: 0xBBBB,
+            0x2FFF: 0xCCCC,
+            0x3000: 0xDDDD,
+            0x3001: 0xEEEE,
+            0x3FFE: 0xFFFF,
+            0x3FFF: 0x1234,
+        }
+        for addr,data in contents.items():
+            ram.update(clk=F)
+            ram.update(In=Signal(data,16),address=Signal(addr,3),load=T)
+            ram.update(clk=T)
+            ram.update(clk=F)
+
+        for addr,data in contents.items():
+            self.assertEqual(ram.update(address=Signal(addr,3))['out'],Signal(data,16))
+
+class TestFastRAM16KInterop(TestRAMBase):
+    def test_ram_random(self):
+        ram16k = FastRAM16K()
+        self.do_test_random(ram16k,10000,16000)
