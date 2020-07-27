@@ -219,7 +219,7 @@ class TestFlatRAM64(unittest.TestCase):
             self.assertEqual(ram.update(address=Signal(addr,6))['out'],Signal(data,16))
 
 #####################################
-def gen_fast_ram_component(name,address_size):
+def gen_fast_ram_component(address_size,name=None):
 
     class FastRAMOutput(Component):
         IN = [w(16).In, w(address_size).address, w.load, w.latch_link]
@@ -290,7 +290,6 @@ def gen_fast_ram_component(name,address_size):
             # for interactive counterpart
             self._clk = Signal(0) 
             self._contents = {}
-            self.is_clocked_component = True
 
         def process_interact(self,In,address,load,clk):
             if self._clk.get() == 0 and clk.get() == 1 and load.get() == 1:
@@ -310,10 +309,19 @@ def gen_fast_ram_component(name,address_size):
                 }''',
         }
 
-    FastRAM.__name__ = name
+    if name:
+        FastRAM.__name__ = name
+    else:
+        size = 2**address_size
+        if size >= 2**20:
+            FastRAM.__name__ = f'FastRAM{size/2**20}M'
+        elif size >= 2**10:
+            FastRAM.__name__ = f'FastRAM{size/2**10}K'
+        else:
+            FastRAM.__name__ = f'FastRAM{size/2**10}'
     return FastRAM
 
-FastRAM8 = gen_fast_ram_component('FastRAM8',3)
+FastRAM8 = gen_fast_ram_component(3)
 class TestFastRAM8(unittest.TestCase):
     def setUp(self):
         self.ram = FastRAM8()
@@ -343,7 +351,7 @@ class TestFastRAM8(unittest.TestCase):
             self.assertEqual(ram.update(address=Signal(addr,3))['out'],Signal(data,16))
 
 #####################################
-FastRAM16K = gen_fast_ram_component('FastRAM16K',14)
+FastRAM16K = gen_fast_ram_component(14)
 class TestFastRAM16K(unittest.TestCase):
     def setUp(self):
         self.ram = FastRAM16K()
