@@ -310,7 +310,8 @@ class SimulationMixin:
                                 added_set.add(v.id)
 
         if ncount != self.sim_n:
-            messages = ['Loop in component parts found.  Remaining components:']
+            messages = ['Error cannot find evaluation order.  Either (1) Loop in component parts found, or (2) some input wire is missing.',
+                        'Remaining components:']
             for uid in self.sim_nodes:
                 u = self.sim_nodes[uid]
                 if u.id not in added_set:
