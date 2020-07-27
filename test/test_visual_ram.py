@@ -314,11 +314,11 @@ def gen_fast_ram_component(address_size,name=None):
     else:
         size = 2**address_size
         if size >= 2**20:
-            FastRAM.__name__ = f'FastRAM{size/2**20}M'
+            FastRAM.__name__ = f'FastRAM{size//2**20}M'
         elif size >= 2**10:
-            FastRAM.__name__ = f'FastRAM{size/2**10}K'
+            FastRAM.__name__ = f'FastRAM{size//2**10}K'
         else:
-            FastRAM.__name__ = f'FastRAM{size/2**10}'
+            FastRAM.__name__ = f'FastRAM{size}'
     return FastRAM
 
 FastRAM8 = gen_fast_ram_component(3)
