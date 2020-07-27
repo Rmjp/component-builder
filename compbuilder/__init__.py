@@ -100,9 +100,11 @@ class SimulationMixin:
 
         def get_top_level_component(self):
             c = self.component
+            p = self.component
             while c.parent_component != None:
+                p = c
                 c = c.parent_component
-            return c
+            return p
 
     def extract_nets(self):
         self.initialize()
