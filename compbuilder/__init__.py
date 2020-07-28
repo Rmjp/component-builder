@@ -839,10 +839,8 @@ class Wire:
         if not self.slice:
             return self.width
         else:
-            if self.slice.start:
-                return self.slice.stop - self.slice.start
-            else:
-                return self.slice.stop
+            start,stop,_ = self.slice.indices(self.width)
+            return stop - start
         
     def slice_signal(self, signal):
         if self.slice:

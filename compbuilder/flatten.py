@@ -164,34 +164,34 @@ def create_nets(self):
 
 ##############################################
 def topsort_nets(self):
+    resolving = deque()
     resolved = set()
-    unexplored = deque()
 
     # start with inputs, constant wires, and latches
-    unexplored.extend(self.wiring[w.get_key()][0] for w in self.IN)
+    resolving.extend(self.wiring[w.get_key()][0] for w in self.IN)
     #print('unexplored init1:',unexplored)
-    unexplored.extend(net for net in self.netlist if net.signal is not None)
+    resolving.extend(net for net in self.netlist if net.signal is not None)
     #print('unexplored init2:',unexplored)
     for p in self.primitives:
         for latch in p.LATCH:
-            unexplored.append(p.wiring[latch.get_key()][0])
+            resolving.append(p.wiring[latch.get_key()][0])
 
-    for u in unexplored:
+    total_edges = sum(len(n.postlist) for n in self.netlist)
+
+    for u in resolving:
         u.level = 0
-    while unexplored:
-        current = unexplored.popleft()
-        #print('current',current)
-        if current in resolved:
-            continue
-        pending = [p for p in current.prelist if p not in resolved]
-        #print('pending',pending)
-        if pending:
-            unexplored.append(current)
-        else:
-            resolved.add(current)
-            for net in current.postlist:
-                net.level = current.level + 1
-                unexplored.append(net)
+    while resolving:
+        current = resolving.popleft()
+        resolved.add(current)
+        #print(f'{len(resolved)}/{len(self.netlist)} nets resolved')
+        for net in current.postlist:
+            net.level = current.level + 1
+            pre = [p for p in net.prelist if p not in resolved]
+            if not pre:
+                resolving.append(net)
+
+    # XXX do loop check here (or should loop have already been detected by the
+    # generic component class
 
 ##############################################
 def trigger(self):
