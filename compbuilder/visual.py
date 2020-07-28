@@ -26,6 +26,7 @@ PRIMITIVE_GATE_JS_TEMPLATE = indent(dedent('''
   "{name}" : {{
     IN: [{inputs}],
     OUT: [{outputs}],
+    init: {init},
     process: {{
   {process}
     }}
@@ -365,11 +366,11 @@ class VisualMixin:
         return box, port_map
 
     ################
-    def _generate_part_config(component):
-        name = component.get_gate_name()
-        inputs = ','.join([f'"{w.name}"' for w in component.IN])
-        outputs = ','.join([f'"{w.name}"' for w in component.OUT])
-        if not component.is_js_primitive():
+    def _generate_part_config(self):
+        name = self.get_gate_name()
+        inputs = ','.join([f'"{w.name}"' for w in self.IN])
+        outputs = ','.join([f'"{w.name}"' for w in self.OUT])
+        if not self.is_js_primitive():
             return COMPOUND_GATE_JS_TEMPLATE.format(
                 name=name,
                 inputs=inputs,
@@ -377,11 +378,16 @@ class VisualMixin:
             )
         else:
             process = [PROCESS_JS_TEMPLATE.format(pin=k,function=v)
-                        for k,v in component.process_interact.js.items()]
+                        for k,v in self.process_interact.js.items()]
+            if hasattr(self.__init__,'js'):
+                init = self.__init__.js
+            else:
+                init = 'null'
             return PRIMITIVE_GATE_JS_TEMPLATE.format(
                 name=name,
                 inputs=inputs,
                 outputs=outputs,
+                init=init,
                 process='\n'.join(process),
             )
 
@@ -529,8 +535,8 @@ def interact(component_class,**kwargs):
     DISP.display_html(DISP.HTML("""
         <script src="https://d3js.org/d3.v5.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/elkjs@0.6.2/lib/elk.bundled.js"></script>
-        <script src="https://www.cpe.ku.ac.th/~cpj/tmp/component.js?v=20200725-1"></script>
-        <script src="https://www.cpe.ku.ac.th/~cpj/tmp/visual.js?v=20200725-1"></script>
+        <script src="https://www.cpe.ku.ac.th/~cpj/tmp/component.js?v=20200728-1"></script>
+        <script src="https://www.cpe.ku.ac.th/~cpj/tmp/visual.js?v=20200728-1"></script>
     """))
 
     component = component_class()

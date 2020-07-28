@@ -26,6 +26,9 @@ var Component = function(comp_config) {
   // give parts their own states
   for (var p of this.parts) {
     p.states = {};
+    if (p.config.init) {
+      p.config.init(p.states);
+    }
   }
 };
 

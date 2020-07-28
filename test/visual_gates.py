@@ -158,6 +158,11 @@ class DFF(VisualComponent):
         self._out = Signal(0)
         self.is_clocked_component = True
         self.saved_input_kwargs = None
+    __init__.js = '''
+        function(s) {
+          s.clk = 0;
+        }
+    '''
     
     def process(self, In=None):
         if self.saved_input_kwargs == None:
