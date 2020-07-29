@@ -613,7 +613,10 @@ class Component(SimulationMixin):
         }
 
     def get_actual_wire(self, estr):
-        return self.wire_assignments[estr]
+        try:
+            return self.wire_assignments[estr]
+        except:
+            raise ComponentError(message=f'Actual wire with key {estr} missing in {self}')
 
     def set_actual_wire(self, estr, wire):
         self.wire_assignments[estr] = wire    
