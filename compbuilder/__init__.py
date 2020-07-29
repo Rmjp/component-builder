@@ -513,7 +513,10 @@ class Component(SimulationMixin):
         for component in self.PARTS:
             for wire in component.IN + component.OUT:
                 key = wire.get_key()
-                actual_wire = component.get_actual_wire(wire.name)
+                try:
+                    actual_wire = component.get_actual_wire(wire.name)
+                except:
+                    raise ComponentError(message=f'Error wire not found when normalizing wire width of component {component} inside {self}.')
                 all_wires.append(actual_wire)
             
         for w in all_wires:
@@ -613,9 +616,9 @@ class Component(SimulationMixin):
         }
 
     def get_actual_wire(self, estr):
-        try:
+        if estr in self.wire_assignments:
             return self.wire_assignments[estr]
-        except:
+        else:
             raise ComponentError(message=f'Actual wire with key {estr} missing in {self}')
 
     def set_actual_wire(self, estr, wire):
