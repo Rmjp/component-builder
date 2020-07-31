@@ -98,7 +98,7 @@ class SimulationMixin:
             self.is_input_node = False
             self.is_output_node = False
 
-        def get_top_level_component(self, depth=1):
+        def get_top_level_components(self, depth=1):
             c = self.component
             parents = []
             while c.parent_component != None:
@@ -265,9 +265,14 @@ class SimulationMixin:
         for uid in self.sim_nodes:
             u = self.sim_nodes[uid]
             u.current_indegree = u.indegree
+            if u.is_output_node:
+                continue
             for m_wire in u.in_mapped_wires:
                 if m_wire['is_constant']:
                     u.current_indegree -= 1
+
+                    if u.current_indegree < 0:
+                        raise ComponentError(messages=f'Implementation Error (negative indegree) {u.is_output_node} {u.current_indegree} {u.component} {m_wire}')
 
         for ek in self.sim_edges:
             e = self.sim_edges[ek]
@@ -297,6 +302,8 @@ class SimulationMixin:
             u = src_list[0]
             src_list = src_list[1:]
 
+            #print('Added:', u.component, u.get_top_level_components(2))
+            
             self.sim_topo_ordering.append(u)
             for ek in u.out_edge_keys:
                 e = self.sim_edges[ek]
@@ -319,15 +326,22 @@ class SimulationMixin:
             for uid in self.sim_nodes:
                 u = self.sim_nodes[uid]
                 if u.id not in added_set:
-                    component_parents = tuple(u.get_top_level_component(self.sim_loop_report_levels))
-                    if err_count < 50:
-                        messages.append(f'- {u.id}: {u.component} (inside {component_parents}) in-wires: {[w["key"] for w in u.in_mapped_wires]}')
-                    elif err_count == 50:
+                    component_parents = tuple(u.get_top_level_components(self.sim_loop_report_levels))
+                    if err_count < self.sim_loop_max_num_report_primitives:
+                        if not u.is_pair_node:
+                            messages.append(f'- {u.id}: {u.component} (wait: {u.current_indegree}) (inside {component_parents}) in-wires: {[w["key"] for w in u.in_mapped_wires]}')
+                        else:
+                            if u.is_input_node:
+                                messages.append(f'- {u.id}: {u.component} [IN] (wait: {u.current_indegree}) (inside {component_parents}) in-wires: {[w["key"] for w in u.in_mapped_wires]}')
+                            else:
+                                messages.append(f'- {u.id}: {u.component} [OUT] (wait: {u.current_indegree}) (inside {component_parents}) in-wires: {[w["key"] for w in u.in_mapped_wires]}')
+                                
+                    elif err_count == self.sim_loop_max_num_report_primitives:
                         messages.append('.... too many ....')
                     err_count += 1
                     parent_set.add(component_parents)
                     
-            if err_count > 50:
+            if err_count > self.sim_loop_max_num_report_primitives:
                 messages.append(f'(for {err_count} components)')
 
             messages.append('Components with errors:')
@@ -464,6 +478,7 @@ class Component(SimulationMixin):
         self.is_clk_wire_added = False
 
         self.sim_loop_report_levels = 2
+        self.sim_loop_max_num_report_primitives = 50
 
     def shallow_clone(self):
         return type(self)(**self.wire_assignments)
