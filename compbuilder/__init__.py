@@ -141,6 +141,7 @@ class SimulationMixin:
         for k in self.get_in_keys() + self.get_out_keys():
             wire_map[k] = [{'cid':self.cid,
                             'key':k,
+                            'component_width': k[1],
                             'offset':0,
                             'is_constant': False,
                             'actual_wire': None}]
@@ -166,6 +167,7 @@ class SimulationMixin:
                     #print('new', cw, component.parent_component.cid, new_key) 
                     wire_map[w].insert(0,{'cid':component.parent_component.cid,
                                           'key':new_key,
+                                          'component_width':wire_map[w][0]['component_width'],
                                           'offset': new_offset,
                                           'is_constant': new_w.is_constant,
                                           'actual_wire': new_w})
@@ -176,6 +178,9 @@ class SimulationMixin:
 
         return wire_map
 
+    def sum_wire_width(self, wires):
+        return sum([w.width for w in wires])
+    
     def build_sim_graph(self):
         base_components, all_components = self.extract_nets()
 
@@ -219,28 +224,28 @@ class SimulationMixin:
                 ek = (c.cid, ('in-out-pair',1))
                 e = get_or_create_edge(ek)
                 e['src'].append(out_node.id)
-                e['dest'].append(in_node.id)
+                e['dest'].append((in_node.id, 1))
 
                 in_node.in_edge_keys.append(ek)
                 out_node.out_edge_keys.append(ek)
 
-                in_node.indegree = len(c.IN) + 1
-                out_node.outdegree = len(c.OUT) + 1
+                in_node.indegree = self.sum_wire_width(c.IN) + 1
+                out_node.outdegree = self.sum_wire_width(c.OUT) + 1
             else:
                 ncount += 1
                 node = self.SimNode(ncount, c)
                 nodes[node.id] = node
-                node.indegree = len(c.IN)
-                node.outdegree = len(c.OUT)
+                node.indegree = self.sum_wire_width(c.IN)
+                node.outdegree = self.sum_wire_width(c.OUT)
 
                 in_node = node
                 out_node = node
-                
+
             for k in c.get_in_keys():
                 wmap = c.wire_map[k][0]
                 ek = (wmap['cid'], wmap['key'])
                 e = get_or_create_edge(ek)
-                e['dest'].append(in_node.id)
+                e['dest'].append((in_node.id, wmap['component_width']))
                 in_node.in_edge_keys.append(ek)
 
             for k in c.get_out_keys():
@@ -269,7 +274,7 @@ class SimulationMixin:
                 continue
             for m_wire in u.in_mapped_wires:
                 if m_wire['is_constant']:
-                    u.current_indegree -= 1
+                    u.current_indegree -= m_wire['component_width']
 
                     if u.current_indegree < 0:
                         raise ComponentError(messages=f'Implementation Error (negative indegree) {u.is_output_node} {u.current_indegree} {u.component} {m_wire}')
@@ -284,8 +289,8 @@ class SimulationMixin:
                 e = self.sim_edges[(self.cid, key)]
             except KeyError as e:
                 raise ComponentError(errors=e) from e
-            for vid in e['dest']:
-                self.sim_nodes[vid].current_indegree -= 1
+            for vid, wire_width in e['dest']:
+                self.sim_nodes[vid].current_indegree -= wire_width
                     
         src_list = []
         added_set = set()
@@ -305,17 +310,20 @@ class SimulationMixin:
             #print('Added:', u.component, u.get_top_level_components(2))
             
             self.sim_topo_ordering.append(u)
+
             for ek in u.out_edge_keys:
                 e = self.sim_edges[ek]
                 e['current_in_count'] += 1
                 if e['current_in_count'] == e['in_signals']:
-                    for vid in e['dest']:
+                    for vid, edge_wire_width in e['dest']:
                         v = self.sim_nodes[vid]
-                        v.current_indegree -= 1
+                        v.current_indegree -= edge_wire_width
                         if v.current_indegree == 0:
                             if v.id not in added_set:
                                 src_list.append(v)
                                 added_set.add(v.id)
+                        elif v.current_indegree < 0:
+                            print('ERROR:', v, v.component, v.current_indegree, ek, v.out_edge_keys, v.out_mapped_wires)    
 
         if ncount != self.sim_n:
             messages = ['Error cannot find evaluation order.  Either (1) Loop in component parts found, or (2) some input wire is missing.',
