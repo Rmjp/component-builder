@@ -226,6 +226,8 @@ class VisualMixin:
             if 'label' not in self.config:
                 self.config['label'] = self.name
             box = self._create_body(self.name)
+            if 'widget' in self.config:
+                box['widget'] = self.config['widget']
         else:
             children = []
             for i,node in self.nodes.items():

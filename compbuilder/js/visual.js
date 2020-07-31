@@ -12,6 +12,9 @@ var context = document.createElement('canvas').getContext('2d');
 var DEFAULT_FONT_SIZE = 16*0.8;
 var DEFAULT_FONT_FACE = "Arial";
 
+var widget_configs = {};
+var widgets = [];
+
 //////////////////////////////////
 function signal_value_hex(value,bits) {
   var digits = Math.ceil(bits/4);
@@ -86,11 +89,13 @@ function drawChildren(svg,node,component) {
 
   node_group
     .each(function(n) { // draw node's body
-      if (n.svg) { // use provided svg when available
+      if (n.widget) { // always use provided widget when available
+        n.widget.svg = d3.select(this);
+      }
+      else if (n.svg) { // then try provided svg
         d3.select(this).html(n.svg);
       }
       else if (n.type == "connector") { // I/O connector
-        n.wire.net = component.nets[n.wire.net];
         d3.select(this)
           .append("path")
             .attr("class","connector " + n.direction)
@@ -104,7 +109,6 @@ function drawChildren(svg,node,component) {
         n.node_id = "root"; // connectors are only attached to root node
       }
       else if (n.type == "constant") {
-        n.wire.net = component.nets[n.wire.net];
         d3.select(this)
           .append("path")
             .attr("class","constant " + n.direction)
@@ -128,10 +132,6 @@ function drawChildren(svg,node,component) {
       portGroup.selectAll("rect.port")
         .data(n.ports, function(p) { return p.id; })
       .enter()
-        .each(function(p) { // resolve reference to net object
-          if (p.wire)
-            p.wire.net = component.nets[p.wire.net];
-        })
         .append("rect")
         .attr("class","port")
         .attr("x", function(p) { return p.x; })
@@ -197,9 +197,6 @@ function drawEdges(svg,node,component) {
   svg.selectAll("path.edge")
     .data(node.edges, function(e) { return e.id; })
   .enter()
-    .each(function(e) { // resolve reference to net object
-      e.wire.net = component.nets[e.wire.net];
-    })
     .append("path")
     .attr("id",function(e) { return e.id; })
     .attr("class","edge")
@@ -233,27 +230,34 @@ function drawNode(svg,node,component) {
 }
 
 //////////////////////////////////
-function update(svg,component) {
-  svg.selectAll("path.edge")
-    .classed("T", function(e) {
-      return signal_width(e.wire) == 1 &&
-             component.get_net_signal(e.wire.net, e.wire.slice);
-    });
-  svg.selectAll("rect.port")
-    .classed("T", function(p) {
-      return signal_width(p.wire) == 1 &&
-             component.get_net_signal(p.wire.net, p.wire.slice);
-    });
-  svg.selectAll("path.connector")
-    .classed("T", function(c) {
-      return signal_width(c.wire) == 1 &&
-             component.get_net_signal(c.wire.net, c.wire.slice);
-    });
-  svg.selectAll("text.label.connector.out")
-    .text(function(c) {
-      var net = c.wire.net;
-      return signal_value_hex(net.signal,net.width);
-    });
+function update_all_wrapper(svg,component) {
+  function update_all() {
+    svg.selectAll("path.edge")
+      .classed("T", function(e) {
+        return signal_width(e.wire) == 1 &&
+               component.get_net_signal(e.wire.net, e.wire.slice);
+      });
+    svg.selectAll("rect.port")
+      .classed("T", function(p) {
+        return signal_width(p.wire) == 1 &&
+               component.get_net_signal(p.wire.net, p.wire.slice);
+      });
+    svg.selectAll("path.connector")
+      .classed("T", function(c) {
+        return signal_width(c.wire) == 1 &&
+               component.get_net_signal(c.wire.net, c.wire.slice);
+      });
+    svg.selectAll("text.label.connector.out")
+      .text(function(c) {
+        var net = c.wire.net;
+        return signal_value_hex(net.signal,net.width);
+      });
+    for (var n of widgets) {
+      if (n.update) n.update();
+    }
+  }
+
+  return update_all;
 }
 
 //////////////////////////////////
@@ -276,7 +280,7 @@ function attach_events(svg,component) {
       var signal = c.wire.net.signal;
       signal = signal ? 0 : 1;
       var out = component.update({[c.wire.name]:signal});
-      update(svg,component);
+      svg.update_all();
     });
   svg.selectAll("path.edge")
     .on("mouseover", function(e) {
@@ -309,7 +313,7 @@ function input_blurred() {
   }
   else {
     this.component.update({[this.name]:val});
-    update(this.svg,this.component);
+    this.svg.update_all();
     this.value = signal_value_hex(this.net.signal,this.net.width);
   }
 }
@@ -351,20 +355,93 @@ function attach_inputs(svg,component) {
 }
 
 //////////////////////////////////
+var Widget = function(widget_config) {
+  for (var k in widget_config) {
+    this[k] = widget_config[k];
+  }
+};
+
+//////////////////////////////////
+function get_wire_wrapper(component,wire) {
+  function get_wire_value() {
+    return component.get_net_signal(wire.net,wire.slice);
+  }
+  return get_wire_value;
+}
+
+//////////////////////////////////
+function set_wire_wrapper(component,wire) {
+  function set_wire_value(value) {
+    return component.set_net_signal(wire.net,wire.slice,value);
+  }
+  return set_wire_value;
+}
+
+//////////////////////////////////
+function resolve_references(component,node) {
+  // resolve references to net and widget instances
+  if (node.type == "connector" || node.type == "constant")
+    node.wire.net = component.nets[node.wire.net];
+  if (node.widget) {
+    node.widget = new Widget(widget_configs[node.widget]);
+    node.width = node.widget.width;
+    node.height = node.widget.height;
+    var get_pin_value_funcs = {};   // mapping pin -> signal getter function
+    var set_pin_value_funcs = {};   // mapping pin -> signal setter function
+    for (var p of node.ports) {
+      get_pin_value_funcs[p.name] = get_wire_wrapper(component,p.wire);
+      set_pin_value_funcs[p.name] = set_wire_wrapper(component,p.wire);
+    }
+    node.widget.get_pin_value = get_pin_value_funcs;
+    node.widget.set_pin_value = set_pin_value_funcs;
+    widgets.push(node.widget);
+  }
+  if (node.ports) {
+    for (var port of node.ports) {
+      if (port.wire) {
+        port.wire.net = component.nets[port.wire.net];
+      }
+    }
+  }
+  if (node.edges) {
+    for (var edge of node.edges) {
+      edge.wire.net = component.nets[edge.wire.net];
+    }
+  }
+  if (node.children) {
+    for (var child of node.children) {
+      resolve_references(component,child);
+    }
+  }
+}
+
+//////////////////////////////////
 function create(selector,config) {
   var elk = new ELK();
-  elk.layout(graph).then(function(layout) {
+  resolve_references(config.component,config.graph);
+  elk.layout(config.graph).then(function(layout) {
     var svg = d3.select(selector).append("svg")
                                    .attr("width", layout.width)
                                    .attr("height", layout.height);
     drawNode(svg,layout,component);
+    for (var w of widgets) {
+      w.setup(svg);
+      w.root_svg = svg;
+    }
     attach_events(svg,config.component);
     attach_inputs(svg,config.component);
-    update(svg,config.component);
+    svg.update_all = update_all_wrapper(svg,config.component);
+    svg.update_all();
   });
 }
 
 //////////////////////////////////
+function register_widget(name,widget_config) {
+  widget_configs[name] = widget_config;
+}
+
+//////////////////////////////////
 exports.create = create;
+exports.register_widget = register_widget;
 
 }));
