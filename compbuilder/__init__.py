@@ -262,9 +262,62 @@ class SimulationMixin:
             'nodes': self.sim_nodes,
             'edges': self.sim_edges,
         }
-        
-    
+
+
+    def check_loop(self):
+        def dfs(u):
+            u.is_visisted = True
+
+            for ek in u.out_edge_keys:
+                e = self.sim_edges[ek]
+                for vid, edge_wire_width in e['dest']:
+                    v = self.sim_nodes[vid]
+                    if v.is_visisted:
+                        if not v.is_returned:
+                            # LOOP!
+                            messages = ['Loop found:']
+                            loop_components = [(u, u.component, u.parent_edge_key)]
+                            current = u
+                            while current != v:
+                                current = current.dfs_parent
+                                loop_components.append((current, current.component, current.parent_edge_key))
+
+                            loop_components.reverse()
+                            messages = ['Loop found:']
+                            for u, c, ek in loop_components:
+                                if not u.is_pair_node:
+                                    messages.append(f' - {c} inside {u.get_top_level_components(self.sim_loop_report_levels)} - {ek}')
+                                else:
+                                    if u.is_input_node:
+                                        messages.append(f' - {c} [IN] inside {u.get_top_level_components(self.sim_loop_report_levels)} - {ek}')
+                                    else:
+                                        messages.append(f' - {c} [OUT] inside {u.get_top_level_components(self.sim_loop_report_levels)} - {ek}')
+                                        
+                            raise ComponentError(message='\n'.join(messages))
+                    else:
+                        v.dfs_parent = u
+                        v.parent_edge_key = ek
+                        dfs(v)
+            
+            u.is_returned = True
+
+        for uid in self.sim_nodes:
+            u = self.sim_nodes[uid]
+            u.is_visisted = False
+            u.is_returned = False
+
+        for uid in self.sim_nodes:
+            u = self.sim_nodes[uid]
+
+            if not u.is_visisted:
+                u.dfs_parent = None
+                u.parent_edge_key = None
+                dfs(u)
+
+
     def top_sort(self):
+        self.check_loop()
+        
         self.sim_topo_ordering = []
 
         for uid in self.sim_nodes:
@@ -326,7 +379,7 @@ class SimulationMixin:
                             print('ERROR:', v, v.component, v.current_indegree, ek, v.out_edge_keys, v.out_mapped_wires)    
 
         if ncount != self.sim_n:
-            messages = ['Error cannot find evaluation order.  Either (1) Loop in component parts found, or (2) some input wire is missing.',
+            messages = ['ERROR: cannot find evaluation order.  Some input wire is missing.',
                         'Remaining components:']
 
             parent_set = set()
