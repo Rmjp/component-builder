@@ -98,13 +98,14 @@ class SimulationMixin:
             self.is_input_node = False
             self.is_output_node = False
 
-        def get_top_level_component(self):
+        def get_top_level_component(self, depth=1):
             c = self.component
-            p = self.component
+            parents = []
             while c.parent_component != None:
-                p = c
+                parents.append(c)
                 c = c.parent_component
-            return p
+            parents.reverse()
+            return parents[:depth]
 
     def extract_nets(self):
         self.initialize()
@@ -312,10 +313,26 @@ class SimulationMixin:
         if ncount != self.sim_n:
             messages = ['Error cannot find evaluation order.  Either (1) Loop in component parts found, or (2) some input wire is missing.',
                         'Remaining components:']
+
+            parent_set = set()
+            err_count = 0
             for uid in self.sim_nodes:
                 u = self.sim_nodes[uid]
                 if u.id not in added_set:
-                    messages.append(f'- {u.id}: {u.component} (inside {u.get_top_level_component()}) in-wires: {[w["key"] for w in u.in_mapped_wires]}')
+                    component_parents = tuple(u.get_top_level_component(self.sim_loop_report_levels))
+                    if err_count < 50:
+                        messages.append(f'- {u.id}: {u.component} (inside {component_parents}) in-wires: {[w["key"] for w in u.in_mapped_wires]}')
+                    elif err_count == 50:
+                        messages.append('.... too many ....')
+                    err_count += 1
+                    parent_set.add(component_parents)
+                    
+            if err_count > 50:
+                messages.append(f'(for {err_count} components)')
+
+            messages.append('Components with errors:')
+            for p in sorted([str(pp) for pp in parent_set]):
+                messages.append(f'- {p}')
 
             messages.append('All top level components:')
             for c in self.internal_components:
@@ -445,6 +462,8 @@ class Component(SimulationMixin):
         self.parent_component = None
 
         self.is_clk_wire_added = False
+
+        self.sim_loop_report_levels = 2
 
     def shallow_clone(self):
         return type(self)(**self.wire_assignments)
