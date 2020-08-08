@@ -590,7 +590,7 @@ def interact(component_class,clockgen=False,**kwargs):
         clockgen = None
     
     DISP.display_html(
-        DISP.HTML('<script>' + component.generate_js(clockgen,**kwargs) + '</script>'))
+        DISP.HTML('<script>' + component.generate_js(clockgen=clockgen,**kwargs) + '</script>'))
     DISP.display_html(DISP.HTML("""
         <link rel="stylesheet" type="text/css" href="https://ecourse.cpe.ku.ac.th/204324/lib/styles.css?v=20200808-1" />
         <div id="diagram"></div>
