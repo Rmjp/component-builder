@@ -191,7 +191,11 @@ def topsort_nets(self):
                 resolving.append(net)
 
     # XXX do loop check here (or should loop have already been detected by the
-    # generic component class
+    # generic component class?
+    for net in self.netlist:
+        if net.level is None:
+            raise Exception(f'Net {net} is unreachable')
+
 
 ##############################################
 def trigger(self):

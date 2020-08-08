@@ -34,7 +34,7 @@ var Component = function(comp_config) {
 
 ///////////////////////////////////////////////////
 Component.prototype.set_net_signal = function(net,slice,value,trans) {
-  var slice = slice || [0,0];
+  var slice = slice || [net.width-1,0];
   var mask = (1 << (slice[0]-slice[1]+1)) - 1;
   value = (value & mask) << slice[1];
   if (!trans) {
@@ -51,7 +51,7 @@ Component.prototype.set_net_signal = function(net,slice,value,trans) {
 
 ///////////////////////////////////////////////////
 Component.prototype.get_net_signal = function(net,slice,trans) {
-  var slice = slice || [0,0];
+  var slice = slice || [net.width-1,0];
   var signal = trans ? net.transient_signal : net.signal;
   if (signal == undefined)
     throw "Undefined signal value";

@@ -279,7 +279,7 @@ function attach_events(svg,component) {
     .on("click", function(c) {
       var signal = c.wire.net.signal;
       signal = signal ? 0 : 1;
-      var out = component.update({[c.wire.name]:signal});
+      component.update({[c.wire.name]:signal});
       svg.update_all();
     });
   svg.selectAll("path.edge")
@@ -423,10 +423,11 @@ function create(selector,config) {
     var svg = d3.select(selector).append("svg")
                                    .attr("width", layout.width)
                                    .attr("height", layout.height);
-    drawNode(svg,layout,component);
+    drawNode(svg,layout,config.component);
     for (var w of widgets) {
       w.setup(svg);
       w.root_svg = svg;
+      w.component = config.component;
     }
     attach_events(svg,config.component);
     attach_inputs(svg,config.component);
