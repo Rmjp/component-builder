@@ -31,7 +31,7 @@ def gen_fast_rom_component(address_size,name,data):
 
         def process(self,address):
             a = address.get()
-            if a < len(data) and a < 2**address_size:
+            if a < len(data):
                 return {'out': Signal(self.DATA[a],16)}
             else:
                 return {'out': Signal(0,16)}
