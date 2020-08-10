@@ -75,10 +75,18 @@ Component.prototype.trigger = function(part) {
     inputs[win] = this.get_net_signal(wiring.net, wiring.slice);
   }
   for (var wout of part.config.OUT) {
+    if (!part.config.process[wout])
+      continue; // no process defined for this output
     var wiring = part.wiring[wout];
     var signal = part.config.process[wout](inputs,part.states);
     this.set_net_signal(wiring.net,wiring.slice,signal,true);
     affected.add(wiring.net);
+  }
+
+  // in case the part is associated with a GUI widget, call the widget's
+  // trigger function, if available
+  if (part.widget && part.widget.trigger) {
+    part.widget.trigger(inputs,part.states);
   }
 
   return affected;

@@ -380,7 +380,7 @@ class VisualMixin:
                 outputs=outputs,
             )
         else:
-            process = [PROCESS_JS_TEMPLATE.format(pin=k,function=v)
+            process = [PROCESS_JS_TEMPLATE.format(pin=k,function=v or 'null')
                         for k,v in self.process_interact.js.items()]
             if hasattr(self.__init__,'js'):
                 init = self.__init__.js

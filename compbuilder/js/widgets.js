@@ -223,6 +223,7 @@ compbuilder.register_widget('keypad',
           pad.attr("fill","yellow");
         else
           pad.attr("fill","black");
+        self.component.update();
         self.root_svg.update_all();
       });
     }
@@ -234,6 +235,8 @@ compbuilder.register_widget('screen',
 {
   width: 514,
   height: 258,
+  color_on: [0,0,0],
+  color_off: [224,255,224],
   setup: function() {
     var self = this;
     var canvas = self.svg.append("foreignObject")
@@ -249,36 +252,33 @@ compbuilder.register_widget('screen',
     self.ctx = canvas.node().getContext("2d");
     self.bitmap = self.ctx.createImageData(512,256);
     for (var i=0; i<self.bitmap.data.length; i += 4) {
-      self.bitmap.data[i+0] = 0;
-      self.bitmap.data[i+1] = 0;
-      self.bitmap.data[i+2] = 0;
+      self.bitmap.data[i+0] = self.color_off[0];
+      self.bitmap.data[i+1] = self.color_off[1];
+      self.bitmap.data[i+2] = self.color_off[2];
       self.bitmap.data[i+3] = 255;
     }
     self.ctx.putImageData(self.bitmap,0,0);
     self._clk = 0;
   },
-  update: function() {
+  trigger: function(w,s) {
     var self = this;
-    var clk = self.get_pin_value['clk']();
-    var load = self.get_pin_value['load']();
-    if (load && self._clk == 0 && clk == 1) {
-      var addr = self.get_pin_value['addr']();
-      var data = self.get_pin_value['data']();
+    if (w.clk && w.load) {
+      var addr = w.address;
+      var data = w.In;
       var img_idx = addr*16*4;
       for (var i=0; i<16; i++) {
         if (data & (1 << i)) {
-          self.bitmap.data[img_idx+i*4+0] = 0;
-          self.bitmap.data[img_idx+i*4+1] = 192;
-          self.bitmap.data[img_idx+i*4+2] = 0;
+          self.bitmap.data[img_idx+i*4+0] = self.color_on[0];
+          self.bitmap.data[img_idx+i*4+1] = self.color_on[1];
+          self.bitmap.data[img_idx+i*4+2] = self.color_on[2];
         }
         else {
-          self.bitmap.data[img_idx+i*4+0] = 0;
-          self.bitmap.data[img_idx+i*4+1] = 0;
-          self.bitmap.data[img_idx+i*4+2] = 0;
+          self.bitmap.data[img_idx+i*4+0] = self.color_off[0];
+          self.bitmap.data[img_idx+i*4+1] = self.color_off[1];
+          self.bitmap.data[img_idx+i*4+2] = self.color_off[2];
         }
       }
       self.ctx.putImageData(self.bitmap,0,0);
     }
-    self._clk = clk;
-  }
+  },
 });

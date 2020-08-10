@@ -378,7 +378,7 @@ function set_wire_wrapper(component,wire) {
 }
 
 //////////////////////////////////
-function resolve_references(component,node) {
+function resolve_references(component,node,partmap) {
   // resolve references to net and widget instances
   if (node.type == "connector" || node.type == "constant")
     node.wire.net = component.nets[node.wire.net];
@@ -394,6 +394,11 @@ function resolve_references(component,node) {
     }
     node.widget.get_pin_value = get_pin_value_funcs;
     node.widget.set_pin_value = set_pin_value_funcs;
+    var part = partmap[node.id];
+    if (part) {
+      part.widget = node.widget;
+      node.widget.part = part;
+    }
     widgets.push(node.widget);
   }
   if (node.ports) {
@@ -410,7 +415,7 @@ function resolve_references(component,node) {
   }
   if (node.children) {
     for (var child of node.children) {
-      resolve_references(component,child);
+      resolve_references(component,child,partmap);
     }
   }
 }
@@ -418,7 +423,11 @@ function resolve_references(component,node) {
 //////////////////////////////////
 function create(selector,config) {
   var elk = new ELK();
-  resolve_references(config.component,config.graph);
+  var partmap = {};
+  for (var part of config.component.parts) {
+    partmap[part.name] = part;
+  }
+  resolve_references(config.component,config.graph,partmap);
   elk.layout(config.graph).then(function(layout) {
     var svg = d3.select(selector).append("svg")
                                    .attr("width", layout.width)
