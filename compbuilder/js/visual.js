@@ -440,6 +440,7 @@ function create(selector,config) {
     }
     attach_events(svg,config.component);
     attach_inputs(svg,config.component);
+    config.component.update();
     svg.update_all = update_all_wrapper(svg,config.component);
     svg.update_all();
   });

@@ -210,15 +210,17 @@ class VisualMixin:
 
     ################
     def _generate_elk(self,depth,netmap,base_id=''):
+        expanded = hasattr(self,'_expanded') and self._expanded
         self.config = deepcopy(DEFAULT_LAYOUT_CONFIG)
         # override with component's layout configuration (if exists) when it
         # is a primitive component or it is shown without internal components
-        if (self.is_js_primitive() or depth == 0) and hasattr(self,"LAYOUT_CONFIG"):
+        if (self.is_js_primitive() or (depth == 0 and not expanded)) \
+                and hasattr(self,"LAYOUT_CONFIG"):
             self.config.update(self.LAYOUT_CONFIG)
 
         # port_map maintain mapping of (node-id,wire,slice) -> (ELK port-id)
         inner_port_map = {}
-        if depth == 0 or self.is_js_primitive(): # just create an IC box
+        if (depth == 0 and not expanded) or self.is_js_primitive(): # just create an IC box
             if 'height' not in self.config:
                 # determine component's height from the maximum number of
                 # ports on each side
@@ -233,7 +235,7 @@ class VisualMixin:
             children = []
             for i,node in self.nodes.items():
                 subcomp_id = f'{base_id}_{i}'
-                subcomp,inner_port_map[i] = node.component._generate_elk(depth-1,netmap,subcomp_id)
+                subcomp,inner_port_map[i] = node.component._generate_elk(max(depth-1,0),netmap,subcomp_id)
                 subcomp['node_id'] = node.id
                 children.append(subcomp)
             # use original label when internal components are shown
@@ -264,7 +266,7 @@ class VisualMixin:
 
         # when internal components are shown, also add edges to represent
         # internal wiring
-        if depth > 0 and not self.is_js_primitive():
+        if (depth > 0 or expanded) and not self.is_js_primitive():
             # maintain a data structure that allows inquiries of an internal
             # wire's source and destination ELK ports by its name and slicing
             # wires: wire-key -> (net,dir,[source...],[dest...])
@@ -395,7 +397,24 @@ class VisualMixin:
             )
 
     ################
-    def generate_elk(self,depth=0,clockgen=None,**kwargs):
+    def generate_elk(self,depth=0,clockgen=None,expand=None,**kwargs):
+        # mark all subcomponents that need to be expanded
+        expand = expand or []
+        for e in expand:
+            seq = []
+            current = self
+            current._expanded = True
+            for id in e.split('-')[1:]: # traverse inside the expanded part
+                id = int(id)
+                seq.append(id)
+                try:
+                    current = current.nodes[id].component
+                    current._expanded = True
+                except KeyError:
+                    break
+            if current.name != e:
+                raise Exception(f'Part {e} not found')
+
         # generate main component box
         layout,port_map = self._generate_elk(depth,self.netmap,**kwargs)
 
@@ -512,7 +531,7 @@ class VisualMixin:
         return hasattr(self,'process_interact')
 
     ################
-    def generate_js(self,indent=None,depth=0,clockgen=None,**kwargs):
+    def generate_js(self,indent=None,depth=0,clockgen=None,expand=None,**kwargs):
         self.flatten()
         lines = []
 
@@ -533,7 +552,7 @@ class VisualMixin:
 
         # ELK graph
         lines.append('')
-        elk = self.generate_elk(depth=depth,clockgen=clockgen,**kwargs)
+        elk = self.generate_elk(depth=depth,clockgen=clockgen,expand=expand,**kwargs)
         lines.append('var graph = '
                 + json.dumps(elk,indent=indent)
                 + ';')
