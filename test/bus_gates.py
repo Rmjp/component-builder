@@ -29,3 +29,12 @@ class And8(Component):
             And8.PARTS.append(And(a=w.a[i], b=w.b[i],
                                   out=w.out[i]))
 
+class AndWith12(Component):
+    IN = [w(8).In]
+    OUT = [w(8).out]
+
+    PARTS = [
+        And8(a=w.In, b=w(8).constant(12), out=w.out),
+    ]
+
+        

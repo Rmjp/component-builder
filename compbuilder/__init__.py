@@ -998,6 +998,10 @@ class WireFactory:
         if name in WireFactory.CONSTANT_FUNCTIONS:
             value = WireFactory.CONSTANT_FUNCTIONS[name](self.width)
             return Wire('__constant__{}_w{}_{}'.format(name, self.width, value), self.width, constant_value=value)
+        elif name == 'constant':
+            def wire_function(value):
+                return Wire('__constant__constant_w{}_{}'.format(self.width, value), self.width, constant_value=value)
+            return wire_function
         else:
             return Wire(name, self.width)
     
