@@ -164,17 +164,16 @@ def create_nets(self):
 
 ##############################################
 def topsort_nets(self):
-    resolving = deque()
     resolved = set()
+    resolving_set = set()
 
     # start with inputs, constant wires, and latches
-    resolving.extend(self.wiring[w.get_key()][0] for w in self.IN)
-    #print('unexplored init1:',unexplored)
-    resolving.extend(net for net in self.netlist if net.signal is not None)
-    #print('unexplored init2:',unexplored)
+    resolving_set.update(self.wiring[w.get_key()][0] for w in self.IN)
+    resolving_set.update(net for net in self.netlist if net.signal is not None)
     for p in self.primitives:
         for latch in p.LATCH:
-            resolving.append(p.wiring[latch.get_key()][0])
+            resolving_set.add(p.wiring[latch.get_key()][0])
+    resolving = deque(resolving_set)
 
     total_edges = sum(len(n.postlist) for n in self.netlist)
 
@@ -182,16 +181,25 @@ def topsort_nets(self):
         u.level = 0
     while resolving:
         current = resolving.popleft()
+        resolving_set.remove(current)
         resolved.add(current)
         #print(f'{len(resolved)}/{len(self.netlist)} nets resolved')
         for net in current.postlist:
             net.level = current.level + 1
             pre = [p for p in net.prelist if p not in resolved]
-            if not pre:
+            if not pre and net not in resolving_set:
                 resolving.append(net)
+                resolving_set.add(net)
+            #    print(net,'resolved')
+            #else:
+            #    print(net,'<-',pre)
 
     # XXX do loop check here (or should loop have already been detected by the
-    # generic component class
+    # generic component class?
+    for net in self.netlist:
+        if net.level is None:
+            raise Exception(f'Net {net} is unreachable')
+
 
 ##############################################
 def trigger(self):

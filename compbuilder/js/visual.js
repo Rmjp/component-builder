@@ -14,6 +14,9 @@ var DEFAULT_FONT_FACE = "Arial";
 
 var widget_configs = {};
 var widgets = [];
+var tooltip = null;
+var hovered_edge = null;
+var component = null;
 
 //////////////////////////////////
 function signal_value_hex(value,bits) {
@@ -55,6 +58,17 @@ function measureText(text,fontSize,fontFace) {
 // Traverse the ELK graph and fill in correct label width
 function populateLabelWidth(graph) {
   // TODO
+}
+
+
+//////////////////////////////////
+function update_tooltip_content() {
+  var sigval = component.get_net_signal(
+    hovered_edge.wire.net, hovered_edge.wire.slice);
+  tooltip.html("<span class='signal'>" +
+    hovered_edge.name + " = 0x" + sigval.toString(16).toUpperCase() +
+    "</span>"
+    )
 }
 
 //////////////////////////////////
@@ -255,6 +269,8 @@ function update_all_wrapper(svg,component) {
     for (var n of widgets) {
       if (n.update) n.update();
     }
+    if (hovered_edge)
+      update_tooltip_content();
   }
 
   return update_all;
@@ -264,9 +280,9 @@ function update_all_wrapper(svg,component) {
 function attach_events(svg,component) {
 
   // prepare a tooltip box
-  var tooltip = d3.select("body").append("div")
-      .attr("class", "tooltip")
-      .style("opacity", 0);
+  tooltip = d3.select("body").append("div")
+    .attr("class", "tooltip")
+    .style("opacity", 0);
 
   svg.selectAll(".connector.in")
     .on("mouseover", function(c) {
@@ -279,7 +295,7 @@ function attach_events(svg,component) {
     .on("click", function(c) {
       var signal = c.wire.net.signal;
       signal = signal ? 0 : 1;
-      var out = component.update({[c.wire.name]:signal});
+      component.update({[c.wire.name]:signal});
       svg.update_all();
     });
   svg.selectAll("path.edge")
@@ -288,19 +304,17 @@ function attach_events(svg,component) {
       tooltip.transition()
         .duration(200)
         .style("opacity", .9);
-      var sigval = component.get_net_signal(e.wire.net, e.wire.slice);
-      tooltip.html("<span class='signal'>" +
-        e.name + " = 0x" + sigval.toString(16).toUpperCase() +
-        "</span>"
-        )
-        .style("left", (d3.event.pageX + 10) + "px")
-        .style("top", (d3.event.pageY + 5) + "px");
+      hovered_edge = e;
+      update_tooltip_content();
+      tooltip.style("left", (d3.event.pageX + 10) + "px")
+             .style("top", (d3.event.pageY + 5) + "px");
     })
     .on("mouseout", function(e) {
       d3.select(this).classed("hover",false);
       tooltip.transition()
         .duration(200)
         .style("opacity", 0);
+      hovered_edge = null;
     })
 }
 
@@ -378,7 +392,7 @@ function set_wire_wrapper(component,wire) {
 }
 
 //////////////////////////////////
-function resolve_references(component,node) {
+function resolve_references(component,node,partmap) {
   // resolve references to net and widget instances
   if (node.type == "connector" || node.type == "constant")
     node.wire.net = component.nets[node.wire.net];
@@ -394,6 +408,11 @@ function resolve_references(component,node) {
     }
     node.widget.get_pin_value = get_pin_value_funcs;
     node.widget.set_pin_value = set_pin_value_funcs;
+    var part = partmap[node.id];
+    if (part) {
+      part.widget = node.widget;
+      node.widget.part = part;
+    }
     widgets.push(node.widget);
   }
   if (node.ports) {
@@ -410,7 +429,7 @@ function resolve_references(component,node) {
   }
   if (node.children) {
     for (var child of node.children) {
-      resolve_references(component,child);
+      resolve_references(component,child,partmap);
     }
   }
 }
@@ -418,7 +437,12 @@ function resolve_references(component,node) {
 //////////////////////////////////
 function create(selector,config) {
   var elk = new ELK();
-  resolve_references(config.component,config.graph);
+  var partmap = {};
+  component = config.component;
+  for (var part of component.parts) {
+    partmap[part.name] = part;
+  }
+  resolve_references(component,config.graph,partmap);
   elk.layout(config.graph).then(function(layout) {
     var svg = d3.select(selector).append("svg")
                                    .attr("width", layout.width)
@@ -427,10 +451,12 @@ function create(selector,config) {
     for (var w of widgets) {
       w.setup(svg);
       w.root_svg = svg;
+      w.component = component;
     }
-    attach_events(svg,config.component);
-    attach_inputs(svg,config.component);
-    svg.update_all = update_all_wrapper(svg,config.component);
+    attach_events(svg,component);
+    attach_inputs(svg,component);
+    component.update();
+    svg.update_all = update_all_wrapper(svg,component);
     svg.update_all();
   });
 }

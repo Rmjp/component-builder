@@ -4,6 +4,10 @@ from copy import deepcopy
 from textwrap import indent,dedent
 import json
 from . import flatten
+from . import Component,Signal,w
+
+ASSETS_ROOT = "https://ecourse.cpe.ku.ac.th/component-builder/compbuilder"
+ASSETS_TS = "20200811-1"
 
 DEFAULT_LAYOUT_CONFIG = {
     'width' : 60,
@@ -209,15 +213,17 @@ class VisualMixin:
 
     ################
     def _generate_elk(self,depth,netmap,base_id=''):
+        expanded = hasattr(self,'_expanded') and self._expanded
         self.config = deepcopy(DEFAULT_LAYOUT_CONFIG)
         # override with component's layout configuration (if exists) when it
         # is a primitive component or it is shown without internal components
-        if (self.is_js_primitive() or depth == 0) and hasattr(self,"LAYOUT_CONFIG"):
+        if (self.is_js_primitive() or (depth == 0 and not expanded)) \
+                and hasattr(self,"LAYOUT_CONFIG"):
             self.config.update(self.LAYOUT_CONFIG)
 
         # port_map maintain mapping of (node-id,wire,slice) -> (ELK port-id)
         inner_port_map = {}
-        if depth == 0 or self.is_js_primitive(): # just create an IC box
+        if (depth == 0 and not expanded) or self.is_js_primitive(): # just create an IC box
             if 'height' not in self.config:
                 # determine component's height from the maximum number of
                 # ports on each side
@@ -232,7 +238,7 @@ class VisualMixin:
             children = []
             for i,node in self.nodes.items():
                 subcomp_id = f'{base_id}_{i}'
-                subcomp,inner_port_map[i] = node.component._generate_elk(depth-1,netmap,subcomp_id)
+                subcomp,inner_port_map[i] = node.component._generate_elk(max(depth-1,0),netmap,subcomp_id)
                 subcomp['node_id'] = node.id
                 children.append(subcomp)
             # use original label when internal components are shown
@@ -263,7 +269,7 @@ class VisualMixin:
 
         # when internal components are shown, also add edges to represent
         # internal wiring
-        if depth > 0 and not self.is_js_primitive():
+        if (depth > 0 or expanded) and not self.is_js_primitive():
             # maintain a data structure that allows inquiries of an internal
             # wire's source and destination ELK ports by its name and slicing
             # wires: wire-key -> (net,dir,[source...],[dest...])
@@ -379,7 +385,7 @@ class VisualMixin:
                 outputs=outputs,
             )
         else:
-            process = [PROCESS_JS_TEMPLATE.format(pin=k,function=v)
+            process = [PROCESS_JS_TEMPLATE.format(pin=k,function=v or 'null')
                         for k,v in self.process_interact.js.items()]
             if hasattr(self.__init__,'js'):
                 init = self.__init__.js
@@ -394,10 +400,30 @@ class VisualMixin:
             )
 
     ################
-    def generate_elk(self,depth=0,**kwargs):
+    def generate_elk(self,depth=0,clockgen=None,expand=None,**kwargs):
+        # mark all subcomponents that need to be expanded
+        expand = expand or []
+        for e in expand:
+            seq = []
+            current = self
+            current._expanded = True
+            for id in e.split('-')[1:]: # traverse inside the expanded part
+                id = int(id)
+                seq.append(id)
+                try:
+                    current = current.nodes[id].component
+                    current._expanded = True
+                except KeyError:
+                    break
+            if current.name != e:
+                raise Exception(f'Part {e} not found')
+
+        # generate main component box
         layout,port_map = self._generate_elk(depth,self.netmap,**kwargs)
 
-        connectors = []
+        # add I/O connectors, and optional clock generator, around the main
+        # component
+        widgets = []
         conlinks = []
         ports = [(p,'in') for p in self.IN[::-1]]
         ports += [(p,'out') for p in self.OUT]
@@ -405,15 +431,26 @@ class VisualMixin:
             netwire = _generate_net_wiring(
                     self.wiring[port.get_key()],self.netmap)
             netwire['name'] = port.name
-            if port.width > 1:  # generate placeholder for signal's value
-                value = '0'*math.ceil(port.width/4)
+            if port.name == clockgen:
+                # generate a clock generator widget
+                clk = ClockGenerator(clk=w.clk)
+                clk.flatten()
+                clknet = clk.netlist[0]
+                self.netmap[clknet] = netwire['net']
+                clk_layout,clk_portmap = clk._generate_elk(depth,self.netmap)
+                widget = clk_layout
             else:
-                value = ''
-            connector = self._create_connector(dir,f'{self.name}:{port.name}',value)
-            connector['wire'] = netwire
-            connectors.append(connector)
-            connector_id = connector['ports'][0]['id']
+                # generate a generic I/O connector
+                if port.width > 1:  # generate placeholder for signal's value
+                    value = '0'*math.ceil(port.width/4)
+                else:
+                    value = ''
+                connector = self._create_connector(dir,f'{self.name}:{port.name}',value)
+                connector['wire'] = netwire
+                widget = connector
             port_id = port_map[port.get_key()]
+            widgets.append(widget)
+            connector_id = widget['ports'][0]['id']
             conlink = self._create_edge(connector_id,port_id)
             conlink['id'] = f'CE:{i}'
             conlink['wire'] = netwire
@@ -422,7 +459,7 @@ class VisualMixin:
 
         return {
             'id' : 'root',
-            'children' : [layout] + connectors,
+            'children' : [layout] + widgets,
             'edges' : conlinks,
         }
 
@@ -497,7 +534,7 @@ class VisualMixin:
         return hasattr(self,'process_interact')
 
     ################
-    def generate_js(self,indent=None,depth=0,**kwargs):
+    def generate_js(self,indent=None,depth=0,clockgen=None,expand=None,**kwargs):
         self.flatten()
         lines = []
 
@@ -518,7 +555,7 @@ class VisualMixin:
 
         # ELK graph
         lines.append('')
-        elk = self.generate_elk(depth,**kwargs)
+        elk = self.generate_elk(depth=depth,clockgen=clockgen,expand=expand,**kwargs)
         lines.append('var graph = '
                 + json.dumps(elk,indent=indent)
                 + ';')
@@ -527,9 +564,33 @@ class VisualMixin:
         lines.append('var config = {component: component, graph: graph};');
 
         return '\n'.join(lines)
-
     
-def interact(component_class,**kwargs):
+################################
+class ClockGenerator(VisualMixin,Component):
+    IN = []
+    OUT = [w.clk]
+
+    PARTS = []
+    LATCH = [w.clk]
+
+    LAYOUT_CONFIG = {
+        'label' : '',
+        'ports' : {  # hide all port labels
+            'clk' : {'label' : ''},
+        },
+        'widget': 'clock',
+    }
+
+    def process(self,**inputs):
+        pass
+    def process_interact(self,**inputs):
+        # always generate logic 0 in Python
+        return {'clk': Signal(0)}
+    # will be replaced by clock widget in JavaScript
+    process_interact.js = None
+
+################################
+def interact(component_class,clockgen=False,**kwargs):
     import IPython.display as DISP
 
     # XXX specifying js and css file locations here is very hacky;
@@ -537,19 +598,70 @@ def interact(component_class,**kwargs):
     DISP.display_html(DISP.HTML("""
         <script src="https://d3js.org/d3.v5.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/elkjs@0.6.2/lib/elk.bundled.js"></script>
-        <script src="https://ecourse.cpe.ku.ac.th/204324/lib/component.js?v=20200728-1"></script>
-        <script src="https://ecourse.cpe.ku.ac.th/204324/lib/visual.js?v=20200728-1"></script>
-    """))
+        <script src="{assets_root}/js/component.js?v={assets_ts}"></script>
+        <script src="{assets_root}/js/visual.js?v={assets_ts}"></script>
+        <script src="{assets_root}/js/widgets.js?v={assets_ts}"></script>
+    """.format(assets_root=ASSETS_ROOT,assets_ts=ASSETS_TS)))
 
     component = component_class()
     component.init_interact()
+
+    if clockgen:
+        clockgen = 'clk'
+    else:
+        clockgen = None
     
     DISP.display_html(
-        DISP.HTML('<script>' + component.generate_js(**kwargs) + '</script>'))
+        DISP.HTML('<script>' + component.generate_js(clockgen=clockgen,**kwargs) + '</script>'))
     DISP.display_html(DISP.HTML("""
-        <link rel="stylesheet" type="text/css" href="https://ecourse.cpe.ku.ac.th/204324/lib/styles.css?v=20200728-1" />
+        <link rel="stylesheet" type="text/css" href="{assets_root}/css/styles.css?v={assets_ts}" />
         <div id="diagram"></div>
         <script>
           compbuilder.create("#diagram",config);
         </script>
-    """))
+    """.format(assets_root=ASSETS_ROOT,assets_ts=ASSETS_TS)))
+
+################################
+def generate_html(html_file,component_class,clockgen=False,**kwargs):
+    TEMPLATE = '''<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{component_name}</title>
+<script src="https://d3js.org/d3.v5.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/elkjs@0.6.2/lib/elk.bundled.js"></script>
+<script src="{assets_root}/js/component.js?v={assets_ts}"></script>
+<script src="{assets_root}/js/visual.js?v={assets_ts}"></script>
+<script src="{assets_root}/js/widgets.js?v={assets_ts}"></script>
+<script>
+{js}
+</script>
+<link rel="stylesheet" type="text/css" href="{assets_root}/css/styles.css?v={assets_ts}" />
+</head>
+
+<body>
+  <h2>Component: <i>{component_name}</i></h2>
+  <div id="diagram"></div>
+
+  <script>
+    compbuilder.create("#diagram",config);
+  </script>
+</body>
+</html>
+'''
+
+    component = component_class()
+    component.init_interact()
+
+    if clockgen:
+        clockgen = 'clk'
+    else:
+        clockgen = None
+
+    with open(html_file,'w') as f:
+        f.write(TEMPLATE.format(
+            assets_root=ASSETS_ROOT,
+            assets_ts=ASSETS_TS,
+            component_name=component.get_gate_name(),
+            js=component.generate_js(clockgen=clockgen,**kwargs),
+        ))

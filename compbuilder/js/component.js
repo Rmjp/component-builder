@@ -34,7 +34,7 @@ var Component = function(comp_config) {
 
 ///////////////////////////////////////////////////
 Component.prototype.set_net_signal = function(net,slice,value,trans) {
-  var slice = slice || [0,0];
+  var slice = slice || [net.width-1,0];
   var mask = (1 << (slice[0]-slice[1]+1)) - 1;
   value = (value & mask) << slice[1];
   if (!trans) {
@@ -51,7 +51,7 @@ Component.prototype.set_net_signal = function(net,slice,value,trans) {
 
 ///////////////////////////////////////////////////
 Component.prototype.get_net_signal = function(net,slice,trans) {
-  var slice = slice || [0,0];
+  var slice = slice || [net.width-1,0];
   var signal = trans ? net.transient_signal : net.signal;
   if (signal == undefined)
     throw "Undefined signal value";
@@ -75,10 +75,18 @@ Component.prototype.trigger = function(part) {
     inputs[win] = this.get_net_signal(wiring.net, wiring.slice);
   }
   for (var wout of part.config.OUT) {
+    if (!part.config.process[wout])
+      continue; // no process defined for this output
     var wiring = part.wiring[wout];
     var signal = part.config.process[wout](inputs,part.states);
     this.set_net_signal(wiring.net,wiring.slice,signal,true);
     affected.add(wiring.net);
+  }
+
+  // in case the part is associated with a GUI widget, call the widget's
+  // trigger function, if available
+  if (part.widget && part.widget.trigger) {
+    part.widget.trigger(inputs,part.states);
   }
 
   return affected;
