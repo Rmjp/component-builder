@@ -617,3 +617,46 @@ def interact(component_class,clockgen=False,**kwargs):
           compbuilder.create("#diagram",config);
         </script>
     """))
+
+################################
+def generate_html(html_file,component_class,clockgen=False,**kwargs):
+    TEMPLATE = '''<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{component_name}</title>
+<script src="https://d3js.org/d3.v5.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/elkjs@0.6.2/lib/elk.bundled.js"></script>
+<script src="https://ecourse.cpe.ku.ac.th/204324/lib/component.js?v=20200810-1"></script>
+<script src="https://ecourse.cpe.ku.ac.th/204324/lib/visual.js?v=20200810-1"></script>
+<script src="https://ecourse.cpe.ku.ac.th/204324/lib/widgets.js?v=20200810-1"></script>
+<script>
+{js}
+</script>
+<link rel="stylesheet" type="text/css" href="https://ecourse.cpe.ku.ac.th/204324/lib/styles.css?v=20200810-1" />
+</head>
+
+<body>
+  <h2>Component: <i>{component_name}</i></h2>
+  <div id="diagram"></div>
+
+  <script>
+    compbuilder.create("#diagram",config);
+  </script>
+</body>
+</html>
+'''
+
+    component = component_class()
+    component.init_interact()
+
+    if clockgen:
+        clockgen = 'clk'
+    else:
+        clockgen = None
+
+    with open(html_file,'w') as f:
+        f.write(TEMPLATE.format(
+            component_name=component.get_gate_name(),
+            js=component.generate_js(clockgen=clockgen,**kwargs),
+        ))
