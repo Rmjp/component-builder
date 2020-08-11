@@ -6,6 +6,9 @@ import json
 from . import flatten
 from . import Component,Signal,w
 
+ASSETS_ROOT = "https://ecourse.cpe.ku.ac.th/component-builder/compbuilder"
+ASSETS_TS = "20200811-1"
+
 DEFAULT_LAYOUT_CONFIG = {
     'width' : 60,
     'port_spacing' : 20,
@@ -595,10 +598,10 @@ def interact(component_class,clockgen=False,**kwargs):
     DISP.display_html(DISP.HTML("""
         <script src="https://d3js.org/d3.v5.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/elkjs@0.6.2/lib/elk.bundled.js"></script>
-        <script src="https://ecourse.cpe.ku.ac.th/204324/lib/component.js?v=20200810-1"></script>
-        <script src="https://ecourse.cpe.ku.ac.th/204324/lib/visual.js?v=20200810-1"></script>
-        <script src="https://ecourse.cpe.ku.ac.th/204324/lib/widgets.js?v=20200810-1"></script>
-    """))
+        <script src="{assets_root}/js/component.js?v={assets_ts}"></script>
+        <script src="{assets_root}/js/visual.js?v={assets_ts}"></script>
+        <script src="{assets_root}/js/widgets.js?v={assets_ts}"></script>
+    """.format(assets_root=ASSETS_ROOT,assets_ts=ASSETS_TS)))
 
     component = component_class()
     component.init_interact()
@@ -611,12 +614,12 @@ def interact(component_class,clockgen=False,**kwargs):
     DISP.display_html(
         DISP.HTML('<script>' + component.generate_js(clockgen=clockgen,**kwargs) + '</script>'))
     DISP.display_html(DISP.HTML("""
-        <link rel="stylesheet" type="text/css" href="https://ecourse.cpe.ku.ac.th/204324/lib/styles.css?v=20200810-1" />
+        <link rel="stylesheet" type="text/css" href="{assets_root}/css/styles.css?v={assets_ts}" />
         <div id="diagram"></div>
         <script>
           compbuilder.create("#diagram",config);
         </script>
-    """))
+    """.format(assets_root=ASSETS_ROOT,assets_ts=ASSETS_TS)))
 
 ################################
 def generate_html(html_file,component_class,clockgen=False,**kwargs):
@@ -627,13 +630,13 @@ def generate_html(html_file,component_class,clockgen=False,**kwargs):
 <title>{component_name}</title>
 <script src="https://d3js.org/d3.v5.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/elkjs@0.6.2/lib/elk.bundled.js"></script>
-<script src="https://ecourse.cpe.ku.ac.th/204324/lib/component.js?v=20200810-1"></script>
-<script src="https://ecourse.cpe.ku.ac.th/204324/lib/visual.js?v=20200810-1"></script>
-<script src="https://ecourse.cpe.ku.ac.th/204324/lib/widgets.js?v=20200810-1"></script>
+<script src="{assets_root}/js/component.js?v={assets_ts}"></script>
+<script src="{assets_root}/js/visual.js?v={assets_ts}"></script>
+<script src="{assets_root}/js/widgets.js?v={assets_ts}"></script>
 <script>
 {js}
 </script>
-<link rel="stylesheet" type="text/css" href="https://ecourse.cpe.ku.ac.th/204324/lib/styles.css?v=20200810-1" />
+<link rel="stylesheet" type="text/css" href="{assets_root}/css/styles.css?v={assets_ts}" />
 </head>
 
 <body>
@@ -657,6 +660,8 @@ def generate_html(html_file,component_class,clockgen=False,**kwargs):
 
     with open(html_file,'w') as f:
         f.write(TEMPLATE.format(
+            assets_root=ASSETS_ROOT,
+            assets_ts=ASSETS_TS,
             component_name=component.get_gate_name(),
             js=component.generate_js(clockgen=clockgen,**kwargs),
         ))
