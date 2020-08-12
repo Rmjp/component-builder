@@ -190,7 +190,7 @@ compbuilder.register_widget('seven-segment',
 });
 
 /////////////////////////////////////////////////
-compbuilder.register_widget('keypad',
+compbuilder.register_widget('keyboard',
 {
   width: 105,
   height: 55,
@@ -214,11 +214,11 @@ compbuilder.register_widget('keypad',
         .attr("fill","black")
         .datum(key_id);
       pad.on("click", function(c) {
-        var current = self.get_pin_value['keys']();
+        var current = self.get_pin_value['out']();
         var pad = d3.select(this);
         var key_id = pad.datum();
         current ^= (1 << key_id);
-        self.set_pin_value['keys'](current);
+        self.set_pin_value['out'](current);
         if (current & (1 << key_id))
           pad.attr("fill","yellow");
         else
