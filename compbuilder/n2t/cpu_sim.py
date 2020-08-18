@@ -80,7 +80,7 @@ class PureHackCPU:
 
     def store_result(self, dest, result):
         if (dest & 0b001) > 0:
-            self.ram[this.a] = result
+            self.ram[self.a] = result
 
         if (dest & 0b010) > 0:
             self.d = result
