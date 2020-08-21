@@ -17,6 +17,7 @@ var widgets = [];
 var tooltip = null;
 var hovered_edge = null;
 var component = null;
+var msgdiv = null;
 
 //////////////////////////////////
 function signal_value_hex(value,bits) {
@@ -397,6 +398,11 @@ function resolve_references(component,node,partmap) {
   if (node.type == "connector" || node.type == "constant")
     node.wire.net = component.nets[node.wire.net];
   if (node.widget) {
+    if (!widget_configs[node.widget]) {
+      var err = "Widget " + node.widget + " not registered.";
+      msgdiv.innerHTML = err;
+      throw err;
+    }
     node.widget = new Widget(widget_configs[node.widget]);
     node.width = node.widget.width;
     node.height = node.widget.height;
@@ -435,10 +441,11 @@ function resolve_references(component,node,partmap) {
 }
 
 //////////////////////////////////
-function create(selector,config) {
+function create(selector,config,msgdivid) {
   var elk = new ELK();
   var partmap = {};
   component = config.component;
+  msgdiv = document.querySelector(msgdivid);
   for (var part of component.parts) {
     partmap[part.name] = part;
   }

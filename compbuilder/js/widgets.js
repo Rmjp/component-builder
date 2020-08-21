@@ -282,3 +282,51 @@ compbuilder.register_widget('screen',
     }
   },
 });
+
+/////////////////////////////////////////////////
+compbuilder.register_widget('rom',
+{
+  width: 160,
+  height: 80,
+  setup: function() {
+    var self = this;
+    var progbox = self.svg.append("foreignObject")
+      .attr("width",160)
+      .attr("height",80)
+      .style("border","1px solid lightgrey")
+      .append("xhtml:div")
+        .append("textarea")
+          .attr("id","progbox")
+          .style("width","100%")
+          .style("height","78px")
+          .style("resize","none")
+          .style("box-sizing","border-box");
+    self.data_to_textarea(self.part.states.data,progbox);
+    progbox.on("blur",function() {
+      self.textarea_to_data(progbox,self.part.states.data);
+    });
+  },
+
+  data_to_textarea: function(data,textarea) {
+    var contents = [];
+    for (var word of data) {
+      var s = "000000000" + word.toString(16).toUpperCase();
+      contents.push(s.substr(s.length-4));
+    }
+    textarea.text(contents.join("\n"));
+  },
+
+  textarea_to_data: function(textarea,data) {
+    var self = this;
+    data.length = 0;
+    for (var line of textarea.property("value").split("\n")) {
+      var word = parseInt(line,16);
+      if (!isNaN(word)) {
+        data.push(word);
+      }
+    }
+    self.data_to_textarea(data,textarea);
+    self.component.update();
+    self.root_svg.update_all();
+  }
+});

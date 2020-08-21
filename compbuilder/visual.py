@@ -7,7 +7,7 @@ from . import flatten
 from . import Component,Signal,w
 
 ASSETS_ROOT = "https://ecourse.cpe.ku.ac.th/component-builder/compbuilder"
-ASSETS_TS = "20200812-1"
+ASSETS_TS = "20200821-1"
 
 DEFAULT_LAYOUT_CONFIG = {
     'width' : 60,
@@ -642,9 +642,10 @@ def generate_html(html_file,component_class,clockgen=False,**kwargs):
 <body>
   <h2>Component: <i>{component_name}</i></h2>
   <div id="diagram"></div>
+  <div id="status"></div>
 
   <script>
-    compbuilder.create("#diagram",config);
+    compbuilder.create("#diagram",config,"#status");
   </script>
 </body>
 </html>
