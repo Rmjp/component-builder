@@ -313,7 +313,7 @@ compbuilder.register_widget('rom',
       var s = "000000000" + word.toString(16).toUpperCase();
       contents.push(s.substr(s.length-4));
     }
-    textarea.text(contents.join("\n"));
+    textarea.property("value",contents.join("\n"));
   },
 
   textarea_to_data: function(textarea,data) {
