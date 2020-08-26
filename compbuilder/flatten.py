@@ -369,6 +369,7 @@ def report(cls_or_instance):
         comp = cls_or_instance()
     else:
         comp = cls_or_instance
+    comp.init_interact()
     comp.flatten()
     counter = Counter([p.get_gate_name() for p in comp.primitives])
     print(f'Total primitives: {len(comp.primitives)}')
