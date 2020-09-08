@@ -1,7 +1,10 @@
 def simulate(instructions, memory_display_slots=30, screen_scale=1, light_weight=False, fastest_steps=103, super_fast=False):
     import IPython.display as DISP
 
-    load_instructions = 'simulator.loadInstructions([' + ','.join([str(inst) for inst in instructions]) + ']);'
+    if (len(instructions) > 0) and (type(instructions[0]) == str):
+        load_instructions = 'simulator.loadInstructions([' + ','.join([str(int(inst, 2)) for inst in instructions]) + ']);'
+    else:
+        load_instructions = 'simulator.loadInstructions([' + ','.join([str(inst) for inst in instructions]) + ']);'
 
     if super_fast:
         if not light_weight:
