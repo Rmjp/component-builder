@@ -122,7 +122,7 @@ class PureHackCPU:
             self.store_result(d, result)
             self.jump(j, result, org_jump_location)
     
-    def run(self, num_step):
+    def run(self, num_step, output_traces=True, until_pc=None):
         traces = {
             'pc':[],
             'a':[],
@@ -130,9 +130,12 @@ class PureHackCPU:
         }
         for i in range(num_step):
             self.step()
-            traces['pc'].append(self.pc)
-            traces['a'].append(self.a)
-            traces['d'].append(self.d)
+            if output_traces:
+                traces['pc'].append(self.pc)
+                traces['a'].append(self.a)
+                traces['d'].append(self.d)
+            if pc_limit and self.pc == pc_limit:
+                break
 
-        return traces
+        return traces if output_traces else None
         
