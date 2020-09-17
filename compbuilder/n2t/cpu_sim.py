@@ -134,7 +134,7 @@ class PureHackCPU:
                 traces['pc'].append(self.pc)
                 traces['a'].append(self.a)
                 traces['d'].append(self.d)
-            if pc_limit and self.pc == pc_limit:
+            if self.pc == until_pc:
                 break
 
         return traces if output_traces else None
