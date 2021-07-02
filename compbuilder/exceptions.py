@@ -9,7 +9,7 @@ class ComponentError(Exception):
 
 
 class WireError(Exception):
-    def __init__(self, errors, message):
+    def __init__(self, errors=None, message=''):
         self.message = message
         self.errors = errors
         super().__init__(message)

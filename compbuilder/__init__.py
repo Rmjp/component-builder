@@ -932,6 +932,12 @@ class Wire:
 
     def __getitem__(self, key):
         if type(key) == slice:
+            if key.start is None or key.stop is None:
+                raise WireError(message='Start and stop must be explicitly specified in wire slice')
+            if key.start >= key.stop:
+                raise WireError(message='Start must be less than stop in wire slice')
+            if key.step is not None:
+                raise WireError(message='Step is not allowed in wire slice')
             return Wire(self.name, self.width, key, self.constant_value)
         else:
             return Wire(self.name, self.width, slice(key,key+1), self.constant_value)
