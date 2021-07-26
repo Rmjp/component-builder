@@ -301,7 +301,10 @@ function attach_events(svg,component) {
     });
   svg.selectAll("path.edge")
     .on("mouseover", function(e) {
-      d3.select(this).classed("hover",true);
+      for (var edge of e.wire.net.edges) {
+        var id = 'path#' + edge.id;
+        d3.select(id).classed("hover",true);
+      }
       tooltip.transition()
         .duration(200)
         .style("opacity", .9);
@@ -311,7 +314,10 @@ function attach_events(svg,component) {
              .style("top", (d3.event.pageY + 5) + "px");
     })
     .on("mouseout", function(e) {
-      d3.select(this).classed("hover",false);
+      for (var edge of e.wire.net.edges) {
+        var id = 'path#' + edge.id;
+        d3.select(id).classed("hover",false);
+      }
       tooltip.transition()
         .duration(200)
         .style("opacity", 0);
@@ -431,6 +437,10 @@ function resolve_references(component,node,partmap) {
   if (node.edges) {
     for (var edge of node.edges) {
       edge.wire.net = component.nets[edge.wire.net];
+      var net = edge.wire.net;
+      if (!net.hasOwnProperty('edges'))
+        net.edges = []
+      net.edges.push(edge);
     }
   }
   if (node.children) {

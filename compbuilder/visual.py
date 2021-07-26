@@ -7,7 +7,7 @@ from . import flatten
 from . import Component,Signal,w
 
 ASSETS_ROOT = "https://ecourse.cpe.ku.ac.th/component-builder/compbuilder"
-ASSETS_TS = "20200821-2"
+ASSETS_TS = "20210726-1"
 
 DEFAULT_LAYOUT_CONFIG = {
     'width' : 60,
@@ -37,6 +37,8 @@ PRIMITIVE_GATE_JS_TEMPLATE = indent(dedent('''
   }}'''),'  ')
 
 PROCESS_JS_TEMPLATE = ' '*4 + '"{pin}" : {function},'
+
+_diagram_id = 1
 
 ################################
 def _generate_net_wiring(net_wiring,netmap):
@@ -144,7 +146,7 @@ class VisualMixin:
     def _create_port(self,wire,port_id,index,dir):
         side = {'in': 'WEST','out':'EAST'}[dir]
         port = {
-            'id': f'P:{port_id}',
+            'id': f'P_{port_id}',
             'properties': {
               'port.side': side,
               'port.index': index,
@@ -179,13 +181,13 @@ class VisualMixin:
             width = self.config['connector_width']
         height = self.config['connector_height']
         obj = {
-            'id' : f'C:{port_id}',
+            'id' : f'C_{port_id}',
             'type' : type,
             'direction' : dir,
             'width' : width,
             'height' : height,
             'ports' : [{
-                'id': f'CP:{port_id}',
+                'id': f'CP_{port_id}',
                 'properties': {
                   'port.side': port_side,
                 },
@@ -201,7 +203,7 @@ class VisualMixin:
         if text:
             obj['labels'] = [{
                 'text': text,
-                'id': f'CL:{port_id}',
+                'id': f'CL_{port_id}',
                 'width': width,
                 'height': height,
             }]
@@ -452,7 +454,7 @@ class VisualMixin:
             widgets.append(widget)
             connector_id = widget['ports'][0]['id']
             conlink = self._create_edge(connector_id,port_id)
-            conlink['id'] = f'CE:{i}'
+            conlink['id'] = f'CE_{i}'
             conlink['wire'] = netwire
             conlink['name'] = repr(port)
             conlinks.append(conlink)
@@ -592,6 +594,7 @@ class ClockGenerator(VisualMixin,Component):
 ################################
 def interact(component_class,clockgen=False,**kwargs):
     import IPython.display as DISP
+    global _diagram_id
 
     # XXX specifying js and css file locations here is very hacky;
     # please find a better way
@@ -610,16 +613,20 @@ def interact(component_class,clockgen=False,**kwargs):
         clockgen = 'clk'
     else:
         clockgen = None
-    
+
     DISP.display_html(
         DISP.HTML('<script>' + component.generate_js(clockgen=clockgen,**kwargs) + '</script>'))
     DISP.display_html(DISP.HTML("""
         <link rel="stylesheet" type="text/css" href="{assets_root}/css/styles.css?v={assets_ts}" />
-        <div id="diagram"></div>
+        <div id="interact-diagram-{diagram_id}"></div>
         <script>
-          compbuilder.create("#diagram",config);
+          compbuilder.create("#interact-diagram-{diagram_id}",config);
         </script>
-    """.format(assets_root=ASSETS_ROOT,assets_ts=ASSETS_TS)))
+    """.format(assets_root=ASSETS_ROOT,assets_ts=ASSETS_TS,diagram_id=_diagram_id)))
+
+    _diagram_id += 1
+
+
 
 ################################
 def generate_html(html_file,component_class,clockgen=False,**kwargs):
