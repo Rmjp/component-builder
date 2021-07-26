@@ -247,7 +247,8 @@ compbuilder.register_widget('screen',
         .append("canvas")
           .attr("id","canvas")
           .attr("height",self.height)
-          .attr("width",self.width);
+          .attr("width",self.width)
+          .style("position","fixed");
 
     self.ctx = canvas.node().getContext("2d");
     self.bitmap = self.ctx.createImageData(512,256);
@@ -300,7 +301,8 @@ compbuilder.register_widget('rom',
           .style("width","100%")
           .style("height","78px")
           .style("resize","none")
-          .style("box-sizing","border-box");
+          .style("box-sizing","border-box")
+          .style("position","fixed");
     self.data_to_textarea(self.part.states.data,progbox);
     progbox.on("blur",function() {
       self.textarea_to_data(progbox,self.part.states.data);
