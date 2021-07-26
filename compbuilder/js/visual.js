@@ -14,8 +14,8 @@ var DEFAULT_FONT_FACE = "Arial";
 
 var widget_configs = {};
 var widgets = [];
-var tooltip = null;
 var hovered_edge = null;
+var stamped_edges = [];
 var component = null;
 var msgdiv = null;
 
@@ -63,13 +63,22 @@ function populateLabelWidth(graph) {
 
 
 //////////////////////////////////
-function update_tooltip_content() {
+function update_tooltip(einfo) {
   var sigval = component.get_net_signal(
-    hovered_edge.wire.net, hovered_edge.wire.slice);
-  tooltip.html("<span class='signal'>" +
-    hovered_edge.name + " = 0x" + sigval.toString(16).toUpperCase() +
+    einfo.edge.wire.net, einfo.edge.wire.slice);
+  einfo.tooltip.html("<span class='signal'>" +
+    einfo.edge.name + " = 0x" + sigval.toString(16).toUpperCase() +
     "</span>"
-    )
+    );
+}
+
+//////////////////////////////////
+function update_tooltips() {
+  if (hovered_edge)
+    update_tooltip(hovered_edge);
+  for (var einfo of stamped_edges) {
+    update_tooltip(einfo);
+  }
 }
 
 //////////////////////////////////
@@ -270,20 +279,21 @@ function update_all_wrapper(svg,component) {
     for (var n of widgets) {
       if (n.update) n.update();
     }
-    if (hovered_edge)
-      update_tooltip_content();
+    update_tooltips();
   }
 
   return update_all;
 }
 
 //////////////////////////////////
-function attach_events(svg,component) {
+var tooltip_drag = d3.drag().on("drag", function () {
+    d3.select(this)
+      .style("left", (d3.event.x) + "px")
+      .style("top", (d3.event.y) + "px");
+  });
 
-  // prepare a tooltip box
-  tooltip = d3.select("body").append("div")
-    .attr("class", "tooltip")
-    .style("opacity", 0);
+//////////////////////////////////
+function attach_events(svg,component) {
 
   svg.selectAll(".connector.in")
     .on("mouseover", function(c) {
@@ -305,24 +315,57 @@ function attach_events(svg,component) {
         var id = 'path#' + edge.id;
         d3.select(id).classed("hover",true);
       }
+      var tooltip = d3.select("body").append("div")
+        .attr("class", "tooltip")
+        .style("opacity", 0)
+        .style("left", (d3.event.pageX + 10) + "px")
+        .style("top", (d3.event.pageY + 5) + "px");
+
       tooltip.transition()
         .duration(200)
         .style("opacity", .9);
-      hovered_edge = e;
-      update_tooltip_content();
-      tooltip.style("left", (d3.event.pageX + 10) + "px")
-             .style("top", (d3.event.pageY + 5) + "px");
+      hovered_edge = { edge: e, tooltip: tooltip };
+      update_tooltips();
     })
     .on("mouseout", function(e) {
       for (var edge of e.wire.net.edges) {
         var id = 'path#' + edge.id;
         d3.select(id).classed("hover",false);
       }
-      tooltip.transition()
+      hovered_edge.tooltip.transition()
         .duration(200)
-        .style("opacity", 0);
+        .style("opacity", 0)
+        .remove();
       hovered_edge = null;
     })
+    .on("click", function(e) {
+      var tooltip = d3.select("body").append("div")
+        .attr("class", "tooltip")
+        .style("opacity", 0)
+        .style("left", (d3.event.pageX + 10) + "px")
+        .style("top", (d3.event.pageY + 5) + "px")
+      tooltip.transition()
+        .duration(200)
+        .style("opacity", .9);
+      stamped_edges.push({
+        edge: e,
+        tooltip: tooltip
+      });
+      tooltip.on("click", function() {
+        if (window.getSelection().type != "Range") {
+          var elem = d3.select(this).node();
+          for (var i=0; i<stamped_edges.length; i++) {
+            if (elem == stamped_edges[i].tooltip.node()) {
+              d3.select(this).remove();
+              stamped_edges.splice(i,1);
+              break;
+            }
+          }
+        }
+      });
+      tooltip.call(tooltip_drag);
+      update_tooltips();
+    });
 }
 
 //////////////////////////////////
