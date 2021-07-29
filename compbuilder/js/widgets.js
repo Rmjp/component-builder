@@ -263,7 +263,8 @@ compbuilder.register_widget('screen',
   },
   trigger: function(w,s) {
     var self = this;
-    if (w.clk && w.load) {
+    if (w.clk && w.load && !self._clk) {
+      self._clk = 1;
       var addr = w.address;
       var data = w.In;
       var img_idx = addr*16*4;
@@ -280,6 +281,9 @@ compbuilder.register_widget('screen',
         }
       }
       self.ctx.putImageData(self.bitmap,0,0);
+    }
+    else if (!w.clk && self._clk) {
+      self._clk = 0;
     }
   },
 });
