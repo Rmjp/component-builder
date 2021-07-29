@@ -263,26 +263,28 @@ compbuilder.register_widget('screen',
   },
   trigger: function(w,s) {
     var self = this;
-    if (w.clk && w.load && !self._clk) {
+    if (w.clk && !self._clk) { // rising edge
       self._clk = 1;
-      var addr = w.address;
-      var data = w.In;
-      var img_idx = addr*16*4;
-      for (var i=0; i<16; i++) {
-        if (data & (1 << i)) {
-          self.bitmap.data[img_idx+i*4+0] = self.color_on[0];
-          self.bitmap.data[img_idx+i*4+1] = self.color_on[1];
-          self.bitmap.data[img_idx+i*4+2] = self.color_on[2];
+      if (w.load) {
+        var addr = w.address;
+        var data = w.In;
+        var img_idx = addr*16*4;
+        for (var i=0; i<16; i++) {
+          if (data & (1 << i)) {
+            self.bitmap.data[img_idx+i*4+0] = self.color_on[0];
+            self.bitmap.data[img_idx+i*4+1] = self.color_on[1];
+            self.bitmap.data[img_idx+i*4+2] = self.color_on[2];
+          }
+          else {
+            self.bitmap.data[img_idx+i*4+0] = self.color_off[0];
+            self.bitmap.data[img_idx+i*4+1] = self.color_off[1];
+            self.bitmap.data[img_idx+i*4+2] = self.color_off[2];
+          }
         }
-        else {
-          self.bitmap.data[img_idx+i*4+0] = self.color_off[0];
-          self.bitmap.data[img_idx+i*4+1] = self.color_off[1];
-          self.bitmap.data[img_idx+i*4+2] = self.color_off[2];
-        }
+        self.ctx.putImageData(self.bitmap,0,0);
       }
-      self.ctx.putImageData(self.bitmap,0,0);
     }
-    else if (!w.clk && self._clk) {
+    else if (!w.clk && self._clk) { // falling edge
       self._clk = 0;
     }
   },

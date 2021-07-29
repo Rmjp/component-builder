@@ -7,7 +7,7 @@ from . import flatten
 from . import Component,Signal,w
 
 ASSETS_ROOT = "https://ecourse.cpe.ku.ac.th/component-builder/compbuilder"
-ASSETS_TS = "20210729-1"
+ASSETS_TS = "20210729-2"
 
 DEFAULT_LAYOUT_CONFIG = {
     'width' : 60,
