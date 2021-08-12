@@ -85,7 +85,11 @@ function update_tooltips() {
 function createPath(edge) {
   var pstr = "";
   edge.sections.forEach(function(s) {
-    pstr += "M " + s.startPoint.x + " " + s.startPoint.y + " ";
+    if (edge.dir == "in")
+      // TODO replace the magic number 8 with value from the layout config
+      pstr += "M " + (s.startPoint.x-8) + " " + s.startPoint.y + " ";
+    else
+      pstr += "M " + s.startPoint.x + " " + s.startPoint.y + " ";
     if (s.bendPoints) {
       s.bendPoints.forEach(function(b) {
         pstr += "L " + b.x + " " + b.y + " ";

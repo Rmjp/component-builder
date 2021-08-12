@@ -1,5 +1,6 @@
 from collections import deque
 from compbuilder import Component, Wire, w, Signal
+from compbuilder.tracing import trace
 
 def remap_slice(net_width,net_slice,pin_width,pin_slice):
     '''
@@ -165,21 +166,27 @@ def create_nets(self):
 ##############################################
 def topsort_nets(self):
     resolved = set()
+    resolving_list = []
     resolving_set = set()
 
-    # start with inputs, constant wires, and latches
-    resolving_set.update(self.wiring[w.get_key()][0] for w in self.IN)
-    resolving_set.update(net for net in self.netlist if net.signal is not None)
+    # start with constant wires, inputs, and latches
+    resolving_list.extend(net for net in self.netlist if net.signal is not None)
+    resolving_list.extend(self.wiring[w.get_key()][0] for w in self.IN)
     for p in self.primitives:
         for latch in p.LATCH:
-            resolving_set.add(p.wiring[latch.get_key()][0])
-    resolving = deque(resolving_set)
+            resolving_list.append(p.wiring[latch.get_key()][0])
+
+    resolving_set.update(resolving_list)
+    # we have to use dict to preserve insertion order (python >= 3.6)
+    resolving = deque(dict.fromkeys(resolving_list))
 
     total_edges = sum(len(n.postlist) for n in self.netlist)
 
     for u in resolving:
         u.level = 0
     while resolving:
+        #print('RESOLVING:', resolving)
+        #print('RESOLVED:', resolved)
         current = resolving.popleft()
         resolving_set.remove(current)
         resolved.add(current)
@@ -191,11 +198,20 @@ def topsort_nets(self):
                 resolving.append(net)
                 resolving_set.add(net)
             #    print(net,'resolved')
+            #    if net in resolved:
+            #        raise Exception(f'Loop detected at net {net} pre={net.prelist}')
             #else:
             #    print(net,'<-',pre)
 
     # XXX do loop check here (or should loop have already been detected by the
-    # generic component class?
+    # generic component class?)
+
+    # XXX loop checking may be difficult to do in this function, especially
+    # with primitive clocked components that also immediately react to input
+    # such as fast RAM.  The reason is this function assumes that output of
+    # clocked components have no dependency.
+
+    # check for unreachability
     for net in self.netlist:
         if net.level is None:
             raise Exception(f'Net {net} is unreachable')
@@ -324,6 +340,14 @@ def update(self,**inputs):
 
 ##############################################
 def flatten(self):
+    # run trace with dummy inputs as an attempt to detect loops
+    #tmpcomp = self.__class__()
+    #inputs = {}
+    #for inwire in tmpcomp.IN:
+    #    if inwire.name != 'clk':
+    #        inputs[inwire.name] = [0]
+    #trace(tmpcomp, inputs, [])
+
     if hasattr(self,'netlist'):
         return
     self.netlist, self.primitives = self.create_nets()
