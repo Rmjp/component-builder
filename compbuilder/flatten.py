@@ -370,10 +370,6 @@ def component_repr(self):
 
 ##############################################
 def wire_repr(self):
-    if self.width == 1:
-        prefix = 'w'
-    else:
-        prefix = f'w({self.width})'
     if self.slice:
         start,stop,_ = self.slice.indices(self.width)
     else:
@@ -384,7 +380,7 @@ def wire_repr(self):
         suffix = f'[{start}]'
     else:
         suffix = f'[{start}..{stop-1}]'
-    return f'{prefix}.{self.name}{suffix}'
+    return f'{self.name}{suffix}'
 
 ##############################################
 def report(cls_or_instance):

@@ -12,26 +12,26 @@ var context = document.createElement('canvas').getContext('2d');
 var DEFAULT_FONT_SIZE = 16*0.8;
 var DEFAULT_FONT_FACE = "Arial";
 
-var widget_configs = {};
+var widgetConfigs = {};
 var widgets = [];
-var hovered_edge = null;
-var stamped_edges = [];
+var hoveredSignal = null;
+var stampedSignals = [];
 var component = null;
 var msgdiv = null;
 
 //////////////////////////////////
-function signal_value_hex(value,bits) {
+function signalValueHex(value,bits) {
   var digits = Math.ceil(bits/4);
-  var s = "000000000" + value.toString(16).toUpperCase();
+  var s = "000000000" + value.toString(16).toUpperCase(); // left pad with zero
   return s.substr(s.length-digits);
 }
 
 //////////////////////////////////
-function signal_width(wire) {
+function signalWidth(wire) {
   if (wire.net.width == 1)
     return 1;
   else if (wire.slice)
-    return wire.slice[0] - wire.slice[1] + 1;
+    return wire.slice[1] - wire.slice[0] + 1;
   else
     return wire.net.width;
 }
@@ -63,21 +63,32 @@ function populateLabelWidth(graph) {
 
 
 //////////////////////////////////
-function update_tooltip(einfo) {
-  var sigval = component.get_net_signal(
-    einfo.edge.wire.net, einfo.edge.wire.slice);
-  einfo.tooltip.html("<span class='signal'>" +
-    einfo.edge.name + " = 0x" + sigval.toString(16).toUpperCase() +
-    "</span>"
-    );
+function getEdgeName(e) {
+  if (e.node.id == graph.id) // don't show root's name
+    return e.name;
+  else
+    return e.node.id + ":" + e.name;
 }
 
 //////////////////////////////////
-function update_tooltips() {
-  if (hovered_edge)
-    update_tooltip(hovered_edge);
-  for (var einfo of stamped_edges) {
-    update_tooltip(einfo);
+function updateSignalTooltip(siginfo) {
+  var sigval = component.getNetSignal(siginfo.net, siginfo.slice);
+  var sigwidth = siginfo.slice[1] - siginfo.slice[0] + 1;
+  if (sigwidth == 1) // single-bit signal
+    var sigvalstr = sigval.toString();
+  else
+    var sigvalstr = "0x" + signalValueHex(sigval, sigwidth);
+  siginfo.tooltip.html("<span class='signal'>" +
+    siginfo.name + " = " + sigvalstr + "</span>"
+  );
+}
+
+//////////////////////////////////
+function updateTooltips() {
+  if (hoveredSignal)
+    updateSignalTooltip(hoveredSignal);
+  for (var siginfo of stampedSignals) {
+    updateSignalTooltip(siginfo);
   }
 }
 
@@ -107,7 +118,7 @@ function translate(x,y) {
 
 //////////////////////////////////
 function drawChildren(svg,node,component) {
-  var node_group = svg.selectAll("g.node")
+  var nodeGroup = svg.selectAll("g.node")
     .data(node.children, function(n) { return n.id; })
   .enter()
     .append("g")
@@ -115,7 +126,7 @@ function drawChildren(svg,node,component) {
     .attr("id", function(n) { return n.id; })
     .attr("transform", function(n) { return translate(n.x,n.y); });
 
-  node_group
+  nodeGroup
     .each(function(n) { // draw node's body
       if (n.widget) { // always use provided widget when available
         n.widget.svg = d3.select(this);
@@ -134,7 +145,7 @@ function drawChildren(svg,node,component) {
               return n.wire.net.width > 1;
             })
             .attr("d", drawConnector(n.direction,n.width,n.height));
-        n.node_id = "root"; // connectors are only attached to root node
+        n.node_id = graph.id; // connectors are only attached to root node
       }
       else if (n.type == "constant") {
         d3.select(this)
@@ -229,7 +240,7 @@ function drawEdges(svg,node,component) {
     .attr("id",function(e) { return e.id; })
     .attr("class","edge")
     .classed("bus", function(e) {
-      return signal_width(e.wire) > 1;
+      return signalWidth(e.wire) > 1;
     })
     .attr("d", createPath)
     .attr("stroke", "black")
@@ -258,46 +269,55 @@ function drawNode(svg,node,component) {
 }
 
 //////////////////////////////////
-function update_all_wrapper(svg,component) {
-  function update_all() {
+function updateAllWrapper(svg,component) {
+  function updateAll() {
     svg.selectAll("path.edge")
       .classed("T", function(e) {
-        return signal_width(e.wire) == 1 &&
-               component.get_net_signal(e.wire.net, e.wire.slice);
+        return signalWidth(e.wire) == 1 &&
+               component.getNetSignal(e.wire.net, e.wire.slice);
       });
     svg.selectAll("rect.port")
       .classed("T", function(p) {
-        return signal_width(p.wire) == 1 &&
-               component.get_net_signal(p.wire.net, p.wire.slice);
+        return signalWidth(p.wire) == 1 &&
+               component.getNetSignal(p.wire.net, p.wire.slice);
       });
     svg.selectAll("path.connector")
       .classed("T", function(c) {
-        return signal_width(c.wire) == 1 &&
-               component.get_net_signal(c.wire.net, c.wire.slice);
+        return signalWidth(c.wire) == 1 &&
+               component.getNetSignal(c.wire.net, c.wire.slice);
       });
     svg.selectAll("text.label.connector.out")
       .text(function(c) {
         var net = c.wire.net;
-        return signal_value_hex(net.signal,net.width);
+        return signalValueHex(net.signal,net.width);
       });
     for (var n of widgets) {
       if (n.update) n.update();
     }
-    update_tooltips();
+    updateTooltips();
   }
 
-  return update_all;
+  return updateAll;
 }
 
 //////////////////////////////////
-var tooltip_drag = d3.drag().on("drag", function () {
+function createSignalTooltip(px, py) {
+  return (d3.select("body").append("div")
+        .attr("class", "tooltip")
+        .style("opacity", 0)
+        .style("left", (px + 10) + "px")
+        .style("top", (py + 5) + "px"));
+}
+
+//////////////////////////////////
+var signalTooltipDrag = d3.drag().on("drag", function () {
     d3.select(this)
       .style("left", (d3.event.x) + "px")
       .style("top", (d3.event.y) + "px");
   });
 
 //////////////////////////////////
-function attach_events(svg,component) {
+function attachEvents(svg,component) {
 
   svg.selectAll(".connector.in")
     .on("mouseover", function(c) {
@@ -311,7 +331,7 @@ function attach_events(svg,component) {
       var signal = c.wire.net.signal;
       signal = signal ? 0 : 1;
       component.update({[c.wire.name]:signal});
-      svg.update_all();
+      svg.updateAll();
     });
   svg.selectAll("path.edge")
     .on("mouseover", function(e) {
@@ -319,89 +339,87 @@ function attach_events(svg,component) {
         var id = 'path#' + edge.id;
         d3.select(id).classed("hover",true);
       }
-      var tooltip = d3.select("body").append("div")
-        .attr("class", "tooltip")
-        .style("opacity", 0)
-        .style("left", (d3.event.pageX + 10) + "px")
-        .style("top", (d3.event.pageY + 5) + "px");
-
+      var tooltip = createSignalTooltip(d3.event.pageX + 10, d3.event.pageY + 5);
       tooltip.transition()
         .duration(200)
         .style("opacity", .9);
-      hovered_edge = { edge: e, tooltip: tooltip };
-      update_tooltips();
+      hoveredSignal = {
+        name: getEdgeName(e),
+        net: e.wire.net,
+        slice: e.wire.slice,
+        tooltip: tooltip
+      };
+      updateTooltips();
     })
     .on("mouseout", function(e) {
       for (var edge of e.wire.net.edges) {
         var id = 'path#' + edge.id;
         d3.select(id).classed("hover",false);
       }
-      hovered_edge.tooltip.transition()
+      hoveredSignal.tooltip.transition()
         .duration(200)
         .style("opacity", 0)
         .remove();
-      hovered_edge = null;
+      hoveredSignal = null;
     })
     .on("click", function(e) {
-      var tooltip = d3.select("body").append("div")
-        .attr("class", "tooltip")
-        .style("opacity", 0)
-        .style("left", (d3.event.pageX + 10) + "px")
-        .style("top", (d3.event.pageY + 5) + "px")
+      var tooltip = createSignalTooltip(d3.event.pageX + 10, d3.event.pageY + 5);
       tooltip.transition()
         .duration(200)
         .style("opacity", .9);
-      stamped_edges.push({
-        edge: e,
+      stampedSignals.push({
+        name: getEdgeName(e),
+        net: e.wire.net,
+        slice: e.wire.slice,
         tooltip: tooltip
       });
       tooltip.on("click", function() {
         if (window.getSelection().type != "Range") {
           var elem = d3.select(this).node();
-          for (var i=0; i<stamped_edges.length; i++) {
-            if (elem == stamped_edges[i].tooltip.node()) {
+          for (var i=0; i<stampedSignals.length; i++) {
+            if (elem == stampedSignals[i].tooltip.node()) {
               d3.select(this).remove();
-              stamped_edges.splice(i,1);
+              stampedSignals.splice(i,1);
               break;
             }
           }
         }
       });
-      tooltip.call(tooltip_drag);
-      update_tooltips();
+      tooltip.call(signalTooltipDrag);
+      updateTooltips();
     });
 }
 
 //////////////////////////////////
-function input_blurred() {
+function inputBlurred() {
   var val = parseInt(this.value,16);
   if (isNaN(val)) {
     // restore original value from the corresponding net
-    this.value = signal_value_hex(this.net.signal,this.net.width);
+    this.value = signalValueHex(this.net.signal,this.net.width);
   }
   else {
     this.component.update({[this.name]:val});
-    this.svg.update_all();
-    this.value = signal_value_hex(this.net.signal,this.net.width);
+    this.svg.updateAll();
+    this.value = signalValueHex(this.net.signal,this.net.width);
   }
 }
 
 //////////////////////////////////
-function input_keypressed() {
+function inputKeyPressed() {
   if (event.key == "Enter") {
     this.blur();
   }
 }
 
 //////////////////////////////////
-function attach_inputs(svg,component) {
+function attachInputs(svg,component) {
   // attach input box for each bus input connector
   svg.selectAll(".connector.in.bus")
     .each(function(lbl) {
       var g = d3.select(this.parentNode);
       g.select("text").remove();
       var net = lbl.wire.net;
-      var d3_input = g.append("foreignObject")
+      var d3Input = g.append("foreignObject")
         .attr("width",lbl.width-6)
         .attr("height",lbl.height)
         .attr("x","1")
@@ -412,10 +430,10 @@ function attach_inputs(svg,component) {
             .attr("size",Math.ceil(net.width/4)+1)
             .attr("maxlength",Math.ceil(net.width/4))
             .attr("name",lbl.wire.name)
-            .attr("value",signal_value_hex(net.signal,net.width));
-      var input = d3_input.node();
-      input.onkeypress = input_keypressed;
-      input.onblur = input_blurred;
+            .attr("value",signalValueHex(net.signal,net.width));
+      var input = d3Input.node();
+      input.onkeypress = inputKeyPressed;
+      input.onblur = inputBlurred;
       input.net = lbl.wire.net;
       input.component = component;
       input.svg = svg;
@@ -423,50 +441,50 @@ function attach_inputs(svg,component) {
 }
 
 //////////////////////////////////
-var Widget = function(widget_config) {
-  for (var k in widget_config) {
-    this[k] = widget_config[k];
+var Widget = function(widgetConfig) {
+  for (var k in widgetConfig) {
+    this[k] = widgetConfig[k];
   }
 };
 
 //////////////////////////////////
-function get_wire_wrapper(component,wire) {
-  function get_wire_value() {
-    return component.get_net_signal(wire.net,wire.slice);
+function getWireWrapper(component,wire) {
+  function getWireValue() {
+    return component.getNetSignal(wire.net,wire.slice);
   }
-  return get_wire_value;
+  return getWireValue;
 }
 
 //////////////////////////////////
-function set_wire_wrapper(component,wire) {
-  function set_wire_value(value) {
-    return component.set_net_signal(wire.net,wire.slice,value);
+function setWireWrapper(component,wire) {
+  function setWireValue(value) {
+    return component.setNetSignal(wire.net,wire.slice,value);
   }
-  return set_wire_value;
+  return setWireValue;
 }
 
 //////////////////////////////////
-function resolve_references(component,node,partmap) {
+function resolveReferences(component,node,partmap) {
   // resolve references to net and widget instances
   if (node.type == "connector" || node.type == "constant")
     node.wire.net = component.nets[node.wire.net];
   if (node.widget) {
-    if (!widget_configs[node.widget]) {
+    if (!widgetConfigs[node.widget]) {
       var err = "Widget " + node.widget + " not registered.";
       msgdiv.innerHTML = err;
       throw err;
     }
-    node.widget = new Widget(widget_configs[node.widget]);
+    node.widget = new Widget(widgetConfigs[node.widget]);
     node.width = node.widget.width;
     node.height = node.widget.height;
-    var get_pin_value_funcs = {};   // mapping pin -> signal getter function
-    var set_pin_value_funcs = {};   // mapping pin -> signal setter function
+    var getPinValueFuncs = {};   // mapping pin -> signal getter function
+    var setPinValueFuncs = {};   // mapping pin -> signal setter function
     for (var p of node.ports) {
-      get_pin_value_funcs[p.name] = get_wire_wrapper(component,p.wire);
-      set_pin_value_funcs[p.name] = set_wire_wrapper(component,p.wire);
+      getPinValueFuncs[p.name] = getWireWrapper(component,p.wire);
+      setPinValueFuncs[p.name] = setWireWrapper(component,p.wire);
     }
-    node.widget.get_pin_value = get_pin_value_funcs;
-    node.widget.set_pin_value = set_pin_value_funcs;
+    node.widget.getPinValue = getPinValueFuncs;
+    node.widget.setPinValue = setPinValueFuncs;
     var part = partmap[node.id];
     if (part) {
       part.widget = node.widget;
@@ -484,6 +502,7 @@ function resolve_references(component,node,partmap) {
   if (node.edges) {
     for (var edge of node.edges) {
       edge.wire.net = component.nets[edge.wire.net];
+      edge.node = node;
       var net = edge.wire.net;
       if (!net.hasOwnProperty('edges'))
         net.edges = []
@@ -492,7 +511,7 @@ function resolve_references(component,node,partmap) {
   }
   if (node.children) {
     for (var child of node.children) {
-      resolve_references(component,child,partmap);
+      resolveReferences(component,child,partmap);
     }
   }
 }
@@ -502,11 +521,22 @@ function create(selector,config,msgdivid) {
   var elk = new ELK();
   var partmap = {};
   component = config.component;
+  if (config.watch) {
+    for (var w of watch) {
+      console.log(w);
+    }
+    stampedSignals.push({
+      name: 'hello',
+      net: component.nets[3],
+      slice: [0,0],
+      tooltip: createSignalTooltip(10, 10),
+    });
+  }
   msgdiv = document.querySelector(msgdivid);
   for (var part of component.parts) {
     partmap[part.name] = part;
   }
-  resolve_references(component,config.graph,partmap);
+  resolveReferences(component,config.graph,partmap);
   elk.layout(config.graph).then(function(layout) {
     var svg = d3.select(selector).append("svg")
                                    .attr("width", layout.width)
@@ -514,24 +544,24 @@ function create(selector,config,msgdivid) {
     drawNode(svg,layout,component);
     for (var w of widgets) {
       w.setup(svg);
-      w.root_svg = svg;
+      w.rootSvg = svg;
       w.component = component;
     }
-    attach_events(svg,component);
-    attach_inputs(svg,component);
+    attachEvents(svg,component);
+    attachInputs(svg,component);
     component.update();
-    svg.update_all = update_all_wrapper(svg,component);
-    svg.update_all();
+    svg.updateAll = updateAllWrapper(svg,component);
+    svg.updateAll();
   });
 }
 
 //////////////////////////////////
-function register_widget(name,widget_config) {
-  widget_configs[name] = widget_config;
+function registerWidget(name,widgetConfig) {
+  widgetConfigs[name] = widgetConfig;
 }
 
 //////////////////////////////////
 exports.create = create;
-exports.register_widget = register_widget;
+exports.registerWidget = registerWidget;
 
 }));

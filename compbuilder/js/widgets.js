@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////
-compbuilder.register_widget('clock',
+compbuilder.registerWidget('clock',
 {
   width: 46,
   height: 55,
@@ -29,7 +29,7 @@ compbuilder.register_widget('clock',
       .attr("rx",3)
       .attr("ry",3)
       .on("click",function() {
-        self.set_clock_speed(self,0);
+        self.setClockSpeed(self,0);
       });
     self.svg.append("path")
       .attr("class","control")
@@ -47,7 +47,7 @@ compbuilder.register_widget('clock',
       .attr("rx",3)
       .attr("ry",3)
       .on("click",function() {
-        self.one_shot(self,50);
+        self.oneShot(self,50);
       });
     self.svg.append("path")
       .attr("class","control")
@@ -65,7 +65,7 @@ compbuilder.register_widget('clock',
       .attr("rx",3)
       .attr("ry",3)
       .on("click",function() {
-        self.set_clock_speed(self,1);
+        self.setClockSpeed(self,1);
       });
     self.svg.append("path")
       .attr("class","control")
@@ -83,7 +83,7 @@ compbuilder.register_widget('clock',
       .attr("rx",3)
       .attr("ry",3)
       .on("click",function() {
-        self.set_clock_speed(self,50);
+        self.setClockSpeed(self,50);
       });
     self.svg.append("path")
       .attr("class","control")
@@ -109,7 +109,7 @@ compbuilder.register_widget('clock',
   update: function() {
   },
 
-  set_clock_speed: function(self,hz) {
+  setClockSpeed: function(self,hz) {
     if (self._timer) clearTimeout(self._timer);
     if (hz) {
       self._timeout_ms = 1000/hz/2;
@@ -117,23 +117,23 @@ compbuilder.register_widget('clock',
     }
     else {
       self.component.update({'clk':0});
-      self.root_svg.update_all();
+      self.rootSvg.updateAll();
     }
   },
 
-  one_shot: function(self,duration_ms) {
+  oneShot: function(self,durationMs) {
     if (self._timer) clearTimeout(self._timer);
     self.component.update({'clk':1});
-    self.root_svg.update_all();
+    self.rootSvg.updateAll();
     self._timer = setTimeout(function() {
         self.component.update({'clk':0});
-        self.root_svg.update_all();
-    }, duration_ms);
+        self.rootSvg.updateAll();
+    }, durationMs);
   },
 
   _trigger: function(self,v) {
     self.component.update({'clk':v});
-    self.root_svg.update_all();
+    self.rootSvg.updateAll();
     self._timer = setTimeout(function() {
       self._trigger(self,v^1);
     }, self._timeout_ms);
@@ -141,7 +141,7 @@ compbuilder.register_widget('clock',
 });
 
 /////////////////////////////////////////////////
-compbuilder.register_widget('seven-segment',
+compbuilder.registerWidget('seven-segment',
 {
   width: 80,
   height: 120,
@@ -180,7 +180,7 @@ compbuilder.register_widget('seven-segment',
   update: function() {
     var self = this;
     for (var s in self.segments) {
-      var val = self.get_pin_value[s]();
+      var val = self.getPinValue[s]();
       if (val)
         self.segments[s].attr("fill","red");
       else
@@ -190,7 +190,7 @@ compbuilder.register_widget('seven-segment',
 });
 
 /////////////////////////////////////////////////
-compbuilder.register_widget('keyboard',
+compbuilder.registerWidget('keyboard',
 {
   width: 105,
   height: 55,
@@ -203,40 +203,40 @@ compbuilder.register_widget('keyboard',
       .attr("stroke-width","1px")
       .attr("fill","pink");
 
-    for (var key_id = 0; key_id < 8; key_id++) {
-      var x = key_id % 4;
-      var y = Math.floor(key_id / 4);
+    for (var keyId = 0; keyId < 8; keyId++) {
+      var x = keyId % 4;
+      var y = Math.floor(keyId / 4);
       var pad = self.svg.append("circle")
         .attr("class","keypad")
         .attr("cx",x*25+15)
         .attr("cy",y*25+15)
         .attr("r",10)
         .attr("fill","black")
-        .datum(key_id);
+        .datum(keyId);
       pad.on("click", function(c) {
-        var current = self.get_pin_value['out']();
+        var current = self.getPinValue['out']();
         var pad = d3.select(this);
-        var key_id = pad.datum();
-        current ^= (1 << key_id);
-        self.set_pin_value['out'](current);
-        if (current & (1 << key_id))
+        var keyId = pad.datum();
+        current ^= (1 << keyId);
+        self.setPinValue['out'](current);
+        if (current & (1 << keyId))
           pad.attr("fill","yellow");
         else
           pad.attr("fill","black");
         self.component.update();
-        self.root_svg.update_all();
+        self.rootSvg.updateAll();
       });
     }
   },
 });
 
 /////////////////////////////////////////////////
-compbuilder.register_widget('screen',
+compbuilder.registerWidget('screen',
 {
   width: 514,
   height: 258,
-  color_on: [0,0,0],
-  color_off: [224,255,224],
+  colorOn: [0,0,0],
+  colorOff: [224,255,224],
   setup: function() {
     var self = this;
     var canvas = self.svg.append("foreignObject")
@@ -253,9 +253,9 @@ compbuilder.register_widget('screen',
     self.ctx = canvas.node().getContext("2d");
     self.bitmap = self.ctx.createImageData(512,256);
     for (var i=0; i<self.bitmap.data.length; i += 4) {
-      self.bitmap.data[i+0] = self.color_off[0];
-      self.bitmap.data[i+1] = self.color_off[1];
-      self.bitmap.data[i+2] = self.color_off[2];
+      self.bitmap.data[i+0] = self.colorOff[0];
+      self.bitmap.data[i+1] = self.colorOff[1];
+      self.bitmap.data[i+2] = self.colorOff[2];
       self.bitmap.data[i+3] = 255;
     }
     self.ctx.putImageData(self.bitmap,0,0);
@@ -268,17 +268,17 @@ compbuilder.register_widget('screen',
       if (w.load) {
         var addr = w.address;
         var data = w.In;
-        var img_idx = addr*16*4;
+        var imgIdx = addr*16*4;
         for (var i=0; i<16; i++) {
           if (data & (1 << i)) {
-            self.bitmap.data[img_idx+i*4+0] = self.color_on[0];
-            self.bitmap.data[img_idx+i*4+1] = self.color_on[1];
-            self.bitmap.data[img_idx+i*4+2] = self.color_on[2];
+            self.bitmap.data[imgIdx+i*4+0] = self.colorOn[0];
+            self.bitmap.data[imgIdx+i*4+1] = self.colorOn[1];
+            self.bitmap.data[imgIdx+i*4+2] = self.colorOn[2];
           }
           else {
-            self.bitmap.data[img_idx+i*4+0] = self.color_off[0];
-            self.bitmap.data[img_idx+i*4+1] = self.color_off[1];
-            self.bitmap.data[img_idx+i*4+2] = self.color_off[2];
+            self.bitmap.data[imgIdx+i*4+0] = self.colorOff[0];
+            self.bitmap.data[imgIdx+i*4+1] = self.colorOff[1];
+            self.bitmap.data[imgIdx+i*4+2] = self.colorOff[2];
           }
         }
         self.ctx.putImageData(self.bitmap,0,0);
@@ -291,7 +291,7 @@ compbuilder.register_widget('screen',
 });
 
 /////////////////////////////////////////////////
-compbuilder.register_widget('rom',
+compbuilder.registerWidget('rom',
 {
   width: 160,
   height: 80,
@@ -309,13 +309,13 @@ compbuilder.register_widget('rom',
           .style("resize","none")
           .style("box-sizing","border-box")
           .style("position","fixed");
-    self.data_to_textarea(self.part.states.data,progbox);
+    self.dataToTextArea(self.part.states.data,progbox);
     progbox.on("blur",function() {
-      self.textarea_to_data(progbox,self.part.states.data);
+      self.textareaToData(progbox,self.part.states.data);
     });
   },
 
-  data_to_textarea: function(data,textarea) {
+  dataToTextArea: function(data,textarea) {
     var contents = [];
     for (var word of data) {
       var s = "000000000" + word.toString(16).toUpperCase();
@@ -324,7 +324,7 @@ compbuilder.register_widget('rom',
     textarea.property("value",contents.join("\n"));
   },
 
-  textarea_to_data: function(textarea,data) {
+  textareaToData: function(textarea,data) {
     var self = this;
     data.length = 0;
     for (var line of textarea.property("value").split("\n")) {
@@ -333,8 +333,8 @@ compbuilder.register_widget('rom',
         data.push(word);
       }
     }
-    self.data_to_textarea(data,textarea);
+    self.dataToTextArea(data,textarea);
     self.component.update();
-    self.root_svg.update_all();
+    self.rootSvg.updateAll();
   }
 });

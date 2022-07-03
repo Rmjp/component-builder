@@ -1,19 +1,19 @@
 ///////////////////////////////////////////////////
-var Component = function(comp_config) {
-  for (var k in comp_config) {
-    this[k] = comp_config[k];
+var Component = function(compConfig) {
+  for (var k in compConfig) {
+    this[k] = compConfig[k];
   }
 
   // resolve references to nets, components, primitives, etc.
   for (var w in this.wiring) {
-    var net_idx = this.wiring[w].net;
-    this.wiring[w].net = this.nets[net_idx];
+    var netIdx = this.wiring[w].net;
+    this.wiring[w].net = this.nets[netIdx];
   }
   for (var p of this.parts) {
-    p.config = this.part_configs[p.config];
+    p.config = this.partConfigs[p.config];
     for (var w in p.wiring) {
-      var net_idx = p.wiring[w].net;
-      p.wiring[w].net = this.nets[net_idx];
+      var netIdx = p.wiring[w].net;
+      p.wiring[w].net = this.nets[netIdx];
     }
   }
   for (var n of this.nets) {
@@ -33,31 +33,31 @@ var Component = function(comp_config) {
 };
 
 ///////////////////////////////////////////////////
-Component.prototype.set_net_signal = function(net,slice,value,trans) {
-  var slice = slice || [net.width-1,0];
-  var mask = (1 << (slice[0]-slice[1]+1)) - 1;
-  value = (value & mask) << slice[1];
+Component.prototype.setNetSignal = function(net,slice,value,trans) {
+  var slice = slice || [0,net.width-1];
+  var mask = (1 << (slice[1]-slice[0]+1)) - 1;
+  value = (value & mask) << slice[0];
   if (!trans) {
     var newval = net.signal || 0;
     // enforce unsigned with >>> operator
-    net.signal = ((newval & ~(mask << slice[1])) | value) >>> 0;
+    net.signal = ((newval & ~(mask << slice[0])) | value) >>> 0;
   }
   else {
     var newval = net.transient_signal || 0;
     // enforce unsigned with >>> operator
-    net.transient_signal = ((newval & ~(mask << slice[1])) | value) >>> 0;
+    net.transient_signal = ((newval & ~(mask << slice[0])) | value) >>> 0;
   }
 };
 
 ///////////////////////////////////////////////////
-Component.prototype.get_net_signal = function(net,slice,trans) {
-  var slice = slice || [net.width-1,0];
+Component.prototype.getNetSignal = function(net,slice,trans) {
+  var slice = slice || [0,net.width-1];
   var signal = trans ? net.transient_signal : net.signal;
   if (signal == undefined)
     throw "Undefined signal value";
-  var mask = (1 << (slice[0]-slice[1]+1)) - 1;
+  var mask = (1 << (slice[1]-slice[0]+1)) - 1;
   // enforce unsigned with >>> operator
-  return ((signal >> slice[1]) & mask) >>> 0;
+  return ((signal >> slice[0]) & mask) >>> 0;
 };
 
 ///////////////////////////////////////////////////
@@ -72,14 +72,14 @@ Component.prototype.trigger = function(part) {
   var affected = new Set();
   for (var win of part.config.IN) {
     var wiring = part.wiring[win];
-    inputs[win] = this.get_net_signal(wiring.net, wiring.slice);
+    inputs[win] = this.getNetSignal(wiring.net, wiring.slice);
   }
   for (var wout of part.config.OUT) {
     if (!part.config.process[wout])
       continue; // no process defined for this output
     var wiring = part.wiring[wout];
     var signal = part.config.process[wout](inputs,part.states);
-    this.set_net_signal(wiring.net,wiring.slice,signal,true);
+    this.setNetSignal(wiring.net,wiring.slice,signal,true);
     affected.add(wiring.net);
   }
 
@@ -99,34 +99,34 @@ Component.prototype.update = function(inputs) {
   // populate input nets
   for (var w in inputs) {
     var wiring = comp.wiring[w];
-    this.set_net_signal(wiring.net,wiring.slice,inputs[w]);
+    this.setNetSignal(wiring.net,wiring.slice,inputs[w]);
   }
 
   // populate the remaining nets by their topological ordering
   // (netlist must have already been topologically sorted)
-  var current_level = 0;
-  var transient_nets = new Set();
+  var currentLevel = 0;
+  var transientNets = new Set();
   for (var net of this.nets) {
-    if (net.level != current_level) {
+    if (net.level != currentLevel) {
       // new level -- update previous-level nets with their transient
       // signals
-      for (var tnet of transient_nets) {
+      for (var tnet of transientNets) {
         tnet.signal = tnet.transient_signal;
       }
-      transient_nets.clear();
-      current_level = net.level;
+      transientNets.clear();
+      currentLevel = net.level;
     }
     for (var source of net.sources) {
       if (source.part != comp) { // do not trigger the main component
         var affected = this.trigger(source.part);
         for (var a of affected) {
-          transient_nets.add(a);
+          transientNets.add(a);
         }
       }
     }
   }
   // update from the transient signals in the final level
-  for (var tnet of transient_nets) {
+  for (var tnet of transientNets) {
     tnet.signal = tnet.transient_signal;
   }
 
@@ -134,7 +134,7 @@ Component.prototype.update = function(inputs) {
   var outputs = {};
   for (var w of comp.config.OUT) {
     var wiring = comp.wiring[w];
-    outputs[w] = this.get_net_signal(wiring.net,wiring.slice);
+    outputs[w] = this.getNetSignal(wiring.net,wiring.slice);
   }
   return outputs;
 };

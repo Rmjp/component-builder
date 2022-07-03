@@ -7,7 +7,7 @@ from . import flatten
 from . import Component,Signal,w
 
 ASSETS_ROOT = "https://ecourse.cpe.ku.ac.th/component-builder/compbuilder"
-ASSETS_TS = "20210812-1"
+ASSETS_TS = "20220703-1"
 
 DEFAULT_LAYOUT_CONFIG = {
     'width' : 60,
@@ -46,7 +46,7 @@ def _generate_net_wiring(net_wiring,netmap):
     start,stop,_ = nslice.indices(net.width)
     return {
         'net' : netmap[net],
-        'slice' : [stop-1,start],
+        'slice' : [start,stop-1],
     }
 
 ################################
@@ -61,7 +61,8 @@ def _generate_wiring(comp,netmap):
 def get_wire_name(wire):
     '''
     Generate a string representing a signal from the specified wire with
-    proper slicing notation
+    proper slicing notation.  Note that the notation is different from the
+    notation used in Python.
     >>> get_wire_name(w.a)
     'a'
     >>> get_wire_name(w(8).a)
@@ -461,7 +462,7 @@ class VisualMixin:
             conlinks.append(conlink)
 
         return {
-            'id' : 'root',
+            'id' : '$root',
             'children' : [layout] + widgets,
             'edges' : conlinks,
         }
@@ -514,7 +515,7 @@ class VisualMixin:
                     sources.append({
                         'part' : partmap[source.component],
                         'wire' : source.wire.name,
-                        'slice' : [stop-1,start],
+                        'slice' : [start,stop-1],
                     })
             nets.append({
                 'name' : net.name,
@@ -537,24 +538,24 @@ class VisualMixin:
         return hasattr(self,'process_interact')
 
     ################
-    def generate_js(self,indent=None,depth=0,clockgen=None,expand=None,**kwargs):
+    def generate_js(self,indent=None,depth=0,clockgen=None,expand=None,watch=None,**kwargs):
         self.flatten()
         lines = []
 
         # main component configuration
         comp_js = json.dumps(self._generate_component_config(),indent=indent)
-        lines.append('var comp_config = ' + comp_js + ';')
+        lines.append('var compConfig = ' + comp_js + ';')
 
         # main component's wiring and all used primitives
         used_primitives = {p.__class__:p for p in self.primitives}
         part_configs_js = ','.join(p._generate_part_config()
                 for p in [self]+list(used_primitives.values()))
         lines.append('')
-        lines.append('comp_config.part_configs = {' + part_configs_js + '\n};')
+        lines.append('compConfig.partConfigs = {' + part_configs_js + '\n};')
 
         # instantiate the main component
         lines.append('')
-        lines.append('var component = new Component(comp_config);')
+        lines.append('var component = new Component(compConfig);')
 
         # ELK graph
         lines.append('')
@@ -563,8 +564,14 @@ class VisualMixin:
                 + json.dumps(elk,indent=indent)
                 + ';')
 
+        # Signal watch list
         lines.append('')
-        lines.append('var config = {component: component, graph: graph};');
+        lines.append('var watch = '
+                + json.dumps(watch)
+                + ';')
+
+        lines.append('')
+        lines.append('var config = {component: component, graph: graph, watch: watch};');
 
         return '\n'.join(lines)
     
