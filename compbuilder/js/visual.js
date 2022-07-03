@@ -301,20 +301,22 @@ function updateAllWrapper(svg,component) {
 }
 
 //////////////////////////////////
-function createSignalTooltip(px, py) {
-  return (d3.select("body").append("div")
-        .attr("class", "tooltip")
-        .style("opacity", 0)
-        .style("left", (px + 10) + "px")
-        .style("top", (py + 5) + "px"));
-}
-
-//////////////////////////////////
 var signalTooltipDrag = d3.drag().on("drag", function () {
     d3.select(this)
       .style("left", (d3.event.x) + "px")
       .style("top", (d3.event.y) + "px");
   });
+
+//////////////////////////////////
+function createSignalTooltip(px, py) {
+  var tooltip = d3.select("body").append("div")
+        .attr("class", "tooltip")
+        .style("opacity", 0)
+        .style("left", px + "px")
+        .style("top", py + "px");
+  tooltip.call(signalTooltipDrag);
+  return tooltip;
+}
 
 //////////////////////////////////
 function attachEvents(svg,component) {
@@ -385,7 +387,6 @@ function attachEvents(svg,component) {
           }
         }
       });
-      tooltip.call(signalTooltipDrag);
       updateTooltips();
     });
 }
@@ -521,17 +522,6 @@ function create(selector,config,msgdivid) {
   var elk = new ELK();
   var partmap = {};
   component = config.component;
-  if (config.watch) {
-    for (var w of watch) {
-      console.log(w);
-    }
-    stampedSignals.push({
-      name: 'hello',
-      net: component.nets[3],
-      slice: [0,0],
-      tooltip: createSignalTooltip(10, 10),
-    });
-  }
   msgdiv = document.querySelector(msgdivid);
   for (var part of component.parts) {
     partmap[part.name] = part;
@@ -550,6 +540,19 @@ function create(selector,config,msgdivid) {
     attachEvents(svg,component);
     attachInputs(svg,component);
     component.update();
+    if (config.watch) {
+      var bound = svg.node().getBoundingClientRect();
+      for (var w of config.watch) {
+        var tooltip = createSignalTooltip(w.x+bound.left, w.y+bound.top);
+        stampedSignals.push({
+          name: w.name,
+          net: component.nets[w.netId],
+          slice: w.slice,
+          tooltip: tooltip
+        });
+        tooltip.style("opacity", .9);
+      }
+    }
     svg.updateAll = updateAllWrapper(svg,component);
     svg.updateAll();
   });

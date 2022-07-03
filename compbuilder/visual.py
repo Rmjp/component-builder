@@ -7,7 +7,7 @@ from . import flatten
 from . import Component,Signal,w
 
 ASSETS_ROOT = "https://ecourse.cpe.ku.ac.th/component-builder/compbuilder"
-ASSETS_TS = "20220703-1"
+ASSETS_TS = "20220703-2"
 
 DEFAULT_LAYOUT_CONFIG = {
     'width' : 60,
@@ -537,7 +537,7 @@ class VisualMixin:
     def is_js_primitive(self):
         return hasattr(self,'process_interact')
 
-    ################
+    ##############################################
     def generate_js(self,indent=None,depth=0,clockgen=None,expand=None,watch=None,**kwargs):
         self.flatten()
         lines = []
@@ -565,9 +565,20 @@ class VisualMixin:
                 + ';')
 
         # Signal watch list
+        if watch is not None:
+            watch_list = []
+            for wstr in watch:
+                comp, net, nslice = self.resolve_watch(wstr)
+                watch_list.append({
+                    'name': wstr,
+                    'netId': self.netmap[net],
+                    'slice': [nslice.start, nslice.stop-1],
+                })
+        else:
+            watch_list = []
         lines.append('')
         lines.append('var watch = '
-                + json.dumps(watch)
+                + json.dumps(watch_list)
                 + ';')
 
         lines.append('')
@@ -575,6 +586,72 @@ class VisualMixin:
 
         return '\n'.join(lines)
     
+    ##############################################
+    WATCH_EXPR_RE = re.compile(r'^([A-Za-z][A-Za-z0-9]*(-\d+)*):(\w+)(\[(\d+)(:(\d+))?\])?$')
+    def resolve_watch(self, wstr):
+        """
+        Parse and resolve a watch expression, which can be one of the following forms:
+        - <component>:<wire>
+        - <component>:<wire>[index]
+        - <component>:<wire>[start:stop]
+
+        For example:
+        - HalfAdder-1:c
+        - Mux16:x[4]
+        - Mux16:x[4:8]
+
+        Note that this component must have been flattened.  If successful,
+        this method then returns a 3-tuple (component, net, slice)
+        """
+        m = self.WATCH_EXPR_RE.match(wstr)
+        if m is None:
+            raise ValueError(f'Invalid watch expression: {wstr}')
+        comp_id = m.group(1)
+        if '-' in comp_id:
+            path = [int(x) for x in comp_id.split('-')[1:]]
+            comp_type = comp_id.split('-', 1)[0]
+        else:
+            path = []
+            comp_type = comp_id
+
+        # traverse the path to find the specified component
+        comp = self
+        for idx in path:
+            comp = comp.internal_components[idx-1]
+
+        # check if the actual component type is the same as the expression
+        if comp.get_gate_name() != comp_type:
+            raise ValueError(
+                'Component type mismatched: '
+                f'{comp.get_gate_name()} vs. {comp_type}')
+
+        wire = m.group(3)
+        try:
+            wa = comp.wire_assignments[wire]
+        except KeyError:
+            raise ValueError(f"'{comp_type}' component has no pin '{wire}'")
+
+        pin_width = wa.get_actual_wire_width()
+        pin_key = (wire, wa.get_actual_wire_width())
+        net, pin_slice = comp.wiring[pin_key]
+        start = m.group(5)
+        stop = m.group(7)
+        if start is None and stop is None:  # no slicing; take full width
+            start = 0
+            stop = pin_width
+        else:
+            start = int(start)
+            if stop is not None:
+                stop = int(stop)
+            else:
+                stop = start + 1  # no stop; treat as a single bit
+        watch_slice = slice(start, stop)
+        watch_width = stop - start
+
+        net_slice = flatten.remap_slice(net.width, pin_slice, watch_width, watch_slice)
+        return comp, net, net_slice
+
+
 ################################
 class ClockGenerator(VisualMixin,Component):
     IN = []
@@ -600,7 +677,7 @@ class ClockGenerator(VisualMixin,Component):
     process_interact.js = None
 
 ################################
-def interact(component_class,clockgen=False,**kwargs):
+def interact(component_class,clockgen=False,watch=None,**kwargs):
     import IPython.display as DISP
     global _diagram_id
 
@@ -623,7 +700,9 @@ def interact(component_class,clockgen=False,**kwargs):
         clockgen = None
 
     DISP.display_html(
-        DISP.HTML('<script>' + component.generate_js(clockgen=clockgen,**kwargs) + '</script>'))
+        DISP.HTML('<script>' +
+                  component.generate_js(clockgen=clockgen, watch=watch, **kwargs) + 
+                  '</script>'))
     DISP.display_html(DISP.HTML("""
         <link rel="stylesheet" type="text/css" href="{assets_root}/css/styles.css?v={assets_ts}" />
         <div id="interact-diagram-{diagram_id}"></div>
