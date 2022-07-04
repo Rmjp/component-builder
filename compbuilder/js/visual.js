@@ -61,7 +61,6 @@ function populateLabelWidth(graph) {
   // TODO
 }
 
-
 //////////////////////////////////
 function getEdgeName(e) {
   if (e.node.id == graph.id) // don't show root's name
@@ -540,14 +539,14 @@ function create(selector,config,msgdivid) {
     attachEvents(svg,component);
     attachInputs(svg,component);
     component.update();
-    if (config.watch) {
+    if (config.probe) {
       var bound = svg.node().getBoundingClientRect();
-      for (var w of config.watch) {
-        var tooltip = createSignalTooltip(w.x+bound.left, w.y+bound.top);
+      for (var p of config.probe) {
+        var tooltip = createSignalTooltip(p.x+bound.left, p.y+bound.top);
         stampedSignals.push({
-          name: w.name,
-          net: component.nets[w.netId],
-          slice: w.slice,
+          name: p.name,
+          net: component.nets[p.netId],
+          slice: p.slice,
           tooltip: tooltip
         });
         tooltip.style("opacity", .9);

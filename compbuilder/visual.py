@@ -538,7 +538,13 @@ class VisualMixin:
         return hasattr(self,'process_interact')
 
     ##############################################
-    def generate_js(self,indent=None,depth=0,clockgen=None,expand=None,watch=None,**kwargs):
+    def generate_js(self,
+                    indent=None,
+                    depth=0,
+                    clockgen=None,
+                    expand=None,
+                    probe=None,
+                    **kwargs):
         self.flatten()
         lines = []
 
@@ -564,48 +570,47 @@ class VisualMixin:
                 + json.dumps(elk,indent=indent)
                 + ';')
 
-        # Signal watch list
-        if watch is not None:
-            watch_list = []
-            for wstr in watch:
-                comp, net, nslice = self.resolve_watch(wstr)
-                watch_list.append({
-                    'name': wstr,
+        # Signal probe list
+        if probe is not None:
+            probe_list = []
+            for pstr in probe:
+                comp, wire, wslice, net, nslice = self.resolve_probe(pstr)
+                disp_name = f'{comp.name}:{wire}'
+                if wslice.start == wslice.stop-1:
+                    if wslice.start != 0: # single-bit indexing
+                        disp_name += f'[{wslice.start}]'
+                else: # multi-bit slicing
+                    disp_name += f'[{wslice.start}..{wslice.stop-1}]'
+
+                probe_list.append({
+                    'name': disp_name,
                     'netId': self.netmap[net],
                     'slice': [nslice.start, nslice.stop-1],
                 })
         else:
-            watch_list = []
+            probe_list = []
         lines.append('')
-        lines.append('var watch = '
-                + json.dumps(watch_list)
+        lines.append('var probe = '
+                + json.dumps(probe_list)
                 + ';')
 
         lines.append('')
-        lines.append('var config = {component: component, graph: graph, watch: watch};');
+        lines.append('var config = {component: component, graph: graph, probe: probe};');
 
         return '\n'.join(lines)
     
     ##############################################
-    WATCH_EXPR_RE = re.compile(r'^([A-Za-z][A-Za-z0-9]*(-\d+)*):(\w+)(\[(\d+)(:(\d+))?\])?$')
-    def resolve_watch(self, wstr):
+    PROBE_EXPR_RE = re.compile(
+        r'^([A-Za-z][A-Za-z0-9]*(-\d+)*):(\w+)(\[(\d+)((:|\.\.)(\d+))?\])?$')
+    def resolve_probe(self, pstr):
         """
-        Parse and resolve a watch expression, which can be one of the following forms:
-        - <component>:<wire>
-        - <component>:<wire>[index]
-        - <component>:<wire>[start:stop]
-
-        For example:
-        - HalfAdder-1:c
-        - Mux16:x[4]
-        - Mux16:x[4:8]
-
-        Note that this component must have been flattened.  If successful,
-        this method then returns a 3-tuple (component, net, slice)
+        Parse and resolve a probe expression.  This component must have been
+        flattened before invoking this method.  If successful, this method
+        then returns a tuple (component, wirename, wire_slice, net, net_slice).
         """
-        m = self.WATCH_EXPR_RE.match(wstr)
+        m = self.PROBE_EXPR_RE.match(pstr)
         if m is None:
-            raise ValueError(f'Invalid watch expression: {wstr}')
+            raise ValueError(f'Invalid probe expression: {pstr}')
         comp_id = m.group(1)
         if '-' in comp_id:
             path = [int(x) for x in comp_id.split('-')[1:]]
@@ -635,7 +640,8 @@ class VisualMixin:
         pin_key = (wire, wa.get_actual_wire_width())
         net, pin_slice = comp.wiring[pin_key]
         start = m.group(5)
-        stop = m.group(7)
+        mode = m.group(7)
+        stop = m.group(8)
         if start is None and stop is None:  # no slicing; take full width
             start = 0
             stop = pin_width
@@ -645,11 +651,20 @@ class VisualMixin:
                 stop = int(stop)
             else:
                 stop = start + 1  # no stop; treat as a single bit
-        watch_slice = slice(start, stop)
-        watch_width = stop - start
+        if mode == '..':
+            stop += 1  # inclusive mode; include stop itself
+        probe_slice = slice(start, stop)
+        probe_width = stop - start
 
-        net_slice = flatten.remap_slice(net.width, pin_slice, watch_width, watch_slice)
-        return comp, net, net_slice
+        if probe_width < 1:
+            raise ValueError(f'Invalid wire slicing: {pstr}')
+        if start >= pin_width or stop > pin_width:
+            raise ValueError(
+                f'Out-of-bound slicing: {pstr}; '
+                f'allowed range is {0}..{pin_width-1}')
+
+        net_slice = flatten.remap_slice(net.width, pin_slice, probe_width, probe_slice)
+        return comp, wire, probe_slice, net, net_slice
 
 
 ################################
@@ -677,7 +692,70 @@ class ClockGenerator(VisualMixin,Component):
     process_interact.js = None
 
 ################################
-def interact(component_class,clockgen=False,watch=None,**kwargs):
+def interact(component_class,
+             depth=0,
+             probe=None,
+             expand=None,
+             clockgen=False,
+             **kwargs):
+    """
+    Visualizes a component interactively.  At the moment it only works in
+    Google Colab, not in Jupyter Notebook or Jupyter Lab.  The visualization
+    supports the following interactions:
+
+    * A single-bit input can be toggled by clicking on the input pin.
+    * A multi-bit input can be changed by entering a hexadecimal number in the
+      box attached to the input pin.
+    * Single-bit wires and output pins are highlighted in green when they have
+      logic value of T.
+    * Hovering a mouse pointer over a wire pops up a probe box displaying the
+      wire's name and its current value.
+    * Clicking on a wire makes its probe box permanent, which can be dragged
+      and dropped anywhere in the visualization area.  Clicking on a probe box
+      makes it disappear.
+
+    Note that multi-bit wires are displayed with an inclusive notation as used
+    by various computer archtecture textbooks.  That is, s[i..j] covers from
+    ith bit to jth bit of s, as opposed to Python's notation, s[x:y], which
+    covers from ith bit to (j-1)st bit, excluding jth bit.
+
+    Parameters
+    ----------
+    component_class : Component
+        A component type to be visualized interactively.
+
+    depth : int, default 0
+        How many levels inner components will be shown.
+
+    probe : list of str, default None
+        A list of probe-expressions whose current names and values will be
+        constantly shown in the interactive component widget.  A probe
+        expression can be of the following forms:
+
+        - <component>:<wire>
+        - <component>:<wire>[index]
+        - <component>:<wire>[start:stop] (excluding stop)
+        - <component>:<wire>[start..stop] (including stop)
+
+        For examples:
+        - HalfAdder-1:c
+        - Mux16:x[4]
+        - Mux16:x[4:8]
+        - Mux16:x[4..7]
+
+    expand : list of str, default None
+        A list of names of the inner components whose internal structures will
+        be shown at the depth of 1, regardless of the depth parameter's value.
+
+    clockgen : True or False, default False
+        When True, the clock input of the component will be attached to a
+        clock generator widget which is more convenient to simulate a clock to
+        all clocked components.  Without the clockgen, the clock pin must be
+        transitioned from F to T manually to generate a cycle.  The clockgen
+        provides the |> (play) button to generate clock cycles at the rate of
+        1 Hz, and the |>|> (fast-forward) button at the rate of 20 Hz.  A
+        one-shot cycle can be produced with the |>| button.
+    """
     import IPython.display as DISP
     global _diagram_id
 
@@ -701,7 +779,7 @@ def interact(component_class,clockgen=False,watch=None,**kwargs):
 
     DISP.display_html(
         DISP.HTML('<script>' +
-                  component.generate_js(clockgen=clockgen, watch=watch, **kwargs) + 
+                  component.generate_js(clockgen=clockgen, probe=probe, **kwargs) + 
                   '</script>'))
     DISP.display_html(DISP.HTML("""
         <link rel="stylesheet" type="text/css" href="{assets_root}/css/styles.css?v={assets_ts}" />
