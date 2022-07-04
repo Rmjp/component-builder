@@ -573,8 +573,9 @@ class VisualMixin:
         # Signal probe list
         if probe is not None:
             probe_list = []
+            px, py = 10, 10  # default start position
             for pstr in probe:
-                comp, wire, wslice, net, nslice = self.resolve_probe(pstr)
+                comp, wire, wslice, net, nslice, pos = self.resolve_probe(pstr)
                 disp_name = f'{comp.name}:{wire}'
                 if wslice.start == wslice.stop-1:
                     if wslice.start != 0: # single-bit indexing
@@ -582,10 +583,17 @@ class VisualMixin:
                 else: # multi-bit slicing
                     disp_name += f'[{wslice.start}..{wslice.stop-1}]'
 
+                if pos:
+                    px, py = pos
+                else:
+                    py += 30
+
                 probe_list.append({
                     'name': disp_name,
                     'netId': self.netmap[net],
                     'slice': [nslice.start, nslice.stop-1],
+                    'x': px,
+                    'y': py,
                 })
         else:
             probe_list = []
@@ -601,12 +609,12 @@ class VisualMixin:
     
     ##############################################
     PROBE_EXPR_RE = re.compile(
-        r'^([A-Za-z][A-Za-z0-9]*(-\d+)*):(\w+)(\[(\d+)((:|\.\.)(\d+))?\])?$')
+        r'^([A-Za-z][A-Za-z0-9]*(-\d+)*):(\w+)(\[(\d+)((:|\.\.)(\d+))?\])?(,\d+,\d+)?$')
     def resolve_probe(self, pstr):
         """
         Parse and resolve a probe expression.  This component must have been
         flattened before invoking this method.  If successful, this method
-        then returns a tuple (component, wirename, wire_slice, net, net_slice).
+        then returns a tuple (component, wirename, wire_slice, net, net_slice, pos).
         """
         m = self.PROBE_EXPR_RE.match(pstr)
         if m is None:
@@ -663,8 +671,12 @@ class VisualMixin:
                 f'Out-of-bound slicing: {pstr}; '
                 f'allowed range is {0}..{pin_width-1}')
 
+        pos = m.group(9)
+        if pos is not None:
+            pos = [int(c) for c in pos[1:].split(',')]
+
         net_slice = flatten.remap_slice(net.width, pin_slice, probe_width, probe_slice)
-        return comp, wire, probe_slice, net, net_slice
+        return comp, wire, probe_slice, net, net_slice, pos
 
 
 ################################
@@ -742,6 +754,11 @@ def interact(component_class,
         - Mux16:x[4]
         - Mux16:x[4:8]
         - Mux16:x[4..7]
+
+        In addition, a probe expression can be followed by a pair of integers
+        to specify the display position relative to the interactive widget.
+        For example, the expression 'HalfAdder-1:c,10,50' will show a probe
+        box positioned at (10,50).
 
     expand : list of str, default None
         A list of names of the inner components whose internal structures will
