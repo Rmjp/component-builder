@@ -7,7 +7,7 @@ from . import flatten
 from . import Component,Signal,w
 
 ASSETS_ROOT = "https://ecourse.cpe.ku.ac.th/component-builder/compbuilder"
-ASSETS_TS = "20220704-1"
+ASSETS_TS = "20220704-2"
 
 DEFAULT_LAYOUT_CONFIG = {
     'width' : 60,
@@ -796,7 +796,11 @@ def interact(component_class,
 
     DISP.display_html(
         DISP.HTML('<script>' +
-                  component.generate_js(clockgen=clockgen, probe=probe, **kwargs) + 
+                  component.generate_js(depth=depth,
+                                        probe=probe,
+                                        expand=expand,
+                                        clockgen=clockgen,
+                                        **kwargs) +
                   '</script>'))
     DISP.display_html(DISP.HTML("""
         <link rel="stylesheet" type="text/css" href="{assets_root}/css/styles.css?v={assets_ts}" />
@@ -804,7 +808,7 @@ def interact(component_class,
         <script>
           compbuilder.create("#interact-diagram-{diagram_id}",config);
         </script>
-    """.format(assets_root=ASSETS_ROOT,assets_ts=ASSETS_TS,diagram_id=_diagram_id)))
+    """.format(assets_root=ASSETS_ROOT, assets_ts=ASSETS_TS, diagram_id=_diagram_id)))
 
     _diagram_id += 1
 
