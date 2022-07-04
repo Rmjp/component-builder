@@ -638,21 +638,21 @@ class VisualMixin:
                 'Component type mismatched: '
                 f'{comp.get_gate_name()} vs. {comp_type}')
 
-        wire = m.group(3)
-        try:
-            wa = comp.wire_assignments[wire]
-        except KeyError:
-            raise ValueError(f"'{comp_type}' component has no pin '{wire}'")
+        wire_name = m.group(3)
+        for wire_key in comp.wiring:
+            if wire_name == wire_key[0]:
+                break
+        else:
+            raise ValueError(f"'{comp_type}' component has no pin or wire '{wire_name}'")
 
-        pin_width = wa.get_actual_wire_width()
-        pin_key = (wire, wa.get_actual_wire_width())
-        net, pin_slice = comp.wiring[pin_key]
+        _, wire_width = wire_key
+        net, wire_slice = comp.wiring[wire_key]
         start = m.group(5)
         mode = m.group(7)
         stop = m.group(8)
         if start is None and stop is None:  # no slicing; take full width
             start = 0
-            stop = pin_width
+            stop = wire_width
         else:
             start = int(start)
             if stop is not None:
@@ -666,17 +666,17 @@ class VisualMixin:
 
         if probe_width < 1:
             raise ValueError(f'Invalid wire slicing: {pstr}')
-        if start >= pin_width or stop > pin_width:
+        if start >= wire_width or stop > wire_width:
             raise ValueError(
                 f'Out-of-bound slicing: {pstr}; '
-                f'allowed range is {0}..{pin_width-1}')
+                f'allowed range is {0}..{wire_width-1}')
 
         pos = m.group(9)
         if pos is not None:
             pos = [int(c) for c in pos[1:].split(',')]
 
-        net_slice = flatten.remap_slice(net.width, pin_slice, probe_width, probe_slice)
-        return comp, wire, probe_slice, net, net_slice, pos
+        net_slice = flatten.remap_slice(net.width, wire_slice, probe_width, probe_slice)
+        return comp, wire_name, probe_slice, net, net_slice, pos
 
 
 ################################
