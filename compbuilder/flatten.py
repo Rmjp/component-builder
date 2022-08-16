@@ -2,6 +2,11 @@ from collections import deque
 from compbuilder import Component, Wire, w, Signal
 from compbuilder.tracing import trace
 
+
+class NetUnreachableException(Exception):
+    pass
+
+
 def remap_slice(net_width,net_slice,pin_width,pin_slice):
     '''
     Remap slice relative to local pin wiring into slice relative to global net
@@ -34,7 +39,7 @@ class Net:
             self.wire = wire            # component's port of attachment
             self.slice = net_slice      # part of the net attached to wire
             self.net = net
-            
+
         def __repr__(self):
             start,stop,_ = self.slice.indices(self.net.width)
             return '{}:{} -> {}[{}..{}]'.format(
@@ -50,11 +55,12 @@ class Net:
         self.width = width
         self.signal = signal # current signal value of the net
         self.transient_signal = Signal(0,width) # signal's transient state
-        self.sources = []     # connections to the signal sources of this net
-        self.targets = []     # connections to all targets on this net
-        self.prelist = set()  # set of prerequisites
-        self.postlist = set() # set of nets affected by this one
-        self.level = None     # level in the topological sorting order
+        self.sources = []      # connections to the signal sources of this net
+        self.targets = []      # connections to all targets on this net
+        self.prelist = set()   # set of prerequisites
+        self.postlist = set()  # set of nets affected by this one
+        self.triggered = set() # set of parts and their process that get triggered
+        self.level = None      # level in the topological sorting order
 
     def add_connection(self,component,wire,dir,net_slice):
         if dir == 'in':
@@ -152,9 +158,18 @@ def _create_nets(self,outer,netlist,complist,path):
             for win in self.IN:
                 if win.get_key() not in [w.get_key() for w in self.TRIGGER]:
                     continue
-                in_net,nslice = self.wiring[win.get_key()]
+                in_net, nslice = self.wiring[win.get_key()]
                 out_net.prelist.add(in_net)
                 in_net.postlist.add(out_net)
+
+        # if this part has a latch, add itself to the set of triggered part
+        # maintained by the triggering net
+        for latch, trig in self.LATCH:
+            if trig is None:
+                continue
+            trigger_net, nslice = self.wiring[trig.get_key()]
+            trigger_net.triggered.add((self, latch.name)) # (part, wire-name)
+
 
 ##############################################
 def create_nets(self):
@@ -173,7 +188,13 @@ def topsort_nets(self):
     resolving_list.extend(net for net in self.netlist if net.signal is not None)
     resolving_list.extend(self.wiring[w.get_key()][0] for w in self.IN)
     for p in self.primitives:
-        for latch in p.LATCH:
+        trigger_list = [t.name for t in p.TRIGGER]
+        out_list = [o.name for o in p.OUT]
+        for latch, trig in p.LATCH:
+            if trig is not None and trig.name not in trigger_list:
+                raise ValueError(f'{trig.name} not found in TRIGGER')
+            if latch.name not in out_list:
+                raise ValueError(f'{latch.name} not found in OUT')
             resolving_list.append(p.wiring[latch.get_key()][0])
 
     resolving_set.update(resolving_list)
@@ -211,10 +232,16 @@ def topsort_nets(self):
     # such as fast RAM.  The reason is this function assumes that output of
     # clocked components have no dependency.
 
-    # check for unreachability
+    # check for unreachability; only report top-level nets
+    unreachables = []
     for net in self.netlist:
-        if net.level is None:
-            raise Exception(f'Net {net} is unreachable')
+        if net.level is None and '-' not in net.name:
+            unreachables.append(str(net))
+    if unreachables:
+        raise NetUnreachableException(
+            'The following top-level net(s) are unreachable:\n' +
+            ''.join(f' - {x}\n' for x in unreachables)
+        )
 
 
 ##############################################
@@ -290,6 +317,7 @@ def update(self,**inputs):
     Optimally update net signals with the specified input changes.  Return output
     signals.
     '''
+    # TODO call primitive's process immediately upon change of trigger
     import heapq
     dirty = []
     transient_nets = set()

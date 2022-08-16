@@ -21,6 +21,11 @@ var Component = function(compConfig) {
     for (var source of n.sources) {
       source.part = this.parts[source.part];
     }
+    if ('triggered' in n) {
+      for (var t of n.triggered) {
+        t.part = this.parts[t.part];
+      }
+    }
   }
 
   // give parts their own states
@@ -68,6 +73,8 @@ Component.prototype.trigger = function(part) {
   // been prepared).  The new signals must later on be copied over the current
   // signals before triggering the components attached to the nets in the next
   // topological level.  Return a set of affected nets.
+  //
+  // Notes: This is JS version of trigger() in flatten.py
   var inputs = {};
   var affected = new Set();
   for (var win of part.config.IN) {
@@ -107,18 +114,29 @@ Component.prototype.update = function(inputs) {
   var currentLevel = 0;
   var transientNets = new Set();
   for (var net of this.nets) {
+    // TODO call primitive's process immediately upon change of trigger
     if (net.level != currentLevel) {
       // new level -- update previous-level nets with their transient
       // signals
       for (var tnet of transientNets) {
         tnet.signal = tnet.transient_signal;
       }
+      //console.log(currentLevel, new Set(transientNets));
       transientNets.clear();
       currentLevel = net.level;
     }
     for (var source of net.sources) {
       if (source.part != comp) { // do not trigger the main component
         var affected = this.trigger(source.part);
+        for (var a of affected) {
+          transientNets.add(a);
+        }
+      }
+    }
+    // process parts triggered by this net immediately
+    if ('triggered' in net) {
+      for (var t of net.triggered) {
+        var affected = this.trigger(t.part);
         for (var a of affected) {
           transientNets.add(a);
         }

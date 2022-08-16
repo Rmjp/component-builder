@@ -7,7 +7,7 @@ from . import flatten
 from . import Component,Signal,w
 
 ASSETS_ROOT = "https://ecourse.cpe.ku.ac.th/component-builder/compbuilder"
-ASSETS_TS = "20220704-2"
+ASSETS_TS = "20220816-1"
 
 DEFAULT_LAYOUT_CONFIG = {
     'width' : 60,
@@ -380,8 +380,8 @@ class VisualMixin:
     ################
     def _generate_part_config(self):
         name = self.get_gate_name()
-        inputs = ','.join([f'"{w.name}"' for w in self.IN])
-        outputs = ','.join([f'"{w.name}"' for w in self.OUT])
+        inputs = ','.join(f'"{w.name}"' for w in self.IN)
+        outputs = ','.join(f'"{w.name}"' for w in self.OUT)
         if not self.is_js_primitive():
             return COMPOUND_GATE_JS_TEMPLATE.format(
                 name=name,
@@ -511,20 +511,30 @@ class VisualMixin:
                         'part' : partmap[source.component],
                         'wire' : source.wire.name,
                     })
-                else: 
+                else:
                     sources.append({
                         'part' : partmap[source.component],
                         'wire' : source.wire.name,
                         'slice' : [start,stop-1],
                     })
-            nets.append({
+            net_data = {
                 'name' : net.name,
                 'level' : net.level,
                 'width' : net.width,
                 'signal' : net.signal.get(),
                 'sources' : sources,
                 'wiring' : _generate_wiring(comp,self.netmap),
-            })
+            }
+            triggered = []
+            for part, wname in net.triggered:
+                triggered.append({
+                    'part': partmap[part],
+                    'process': wname,
+                })
+
+            if net.triggered:
+                net_data['triggered'] = triggered
+            nets.append(net_data)
 
         # combine all configs
         config = {
@@ -606,7 +616,7 @@ class VisualMixin:
         lines.append('var config = {component: component, graph: graph, probe: probe};');
 
         return '\n'.join(lines)
-    
+
     ##############################################
     PROBE_EXPR_RE = re.compile(
         r'^([A-Za-z][A-Za-z0-9]*(-\d+)*):(\w+)(\[(\d+)((:|\.\.)(\d+))?\])?(,\d+,\d+)?$')
@@ -685,7 +695,7 @@ class ClockGenerator(VisualMixin,Component):
     OUT = [w.clk]
 
     PARTS = []
-    LATCH = [w.clk]
+    LATCH = [(w.clk, None)]
 
     LAYOUT_CONFIG = {
         'label' : '',

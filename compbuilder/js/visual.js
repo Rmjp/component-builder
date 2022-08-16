@@ -350,6 +350,7 @@ function attachEvents(svg,component) {
         slice: e.wire.slice,
         tooltip: tooltip
       };
+      //exports.hoveredSignal = hoveredSignal;
       updateTooltips();
     })
     .on("mouseout", function(e) {
