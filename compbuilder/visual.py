@@ -8,6 +8,7 @@ from . import Component,Signal,w
 
 ASSETS_ROOT = "https://ecourse.cpe.ku.ac.th/component-builder/compbuilder"
 ASSETS_TS = "20220816-1"
+ELKJS_URL = "https://cdn.jsdelivr.net/npm/elkjs@0.8.2/lib/elk.bundled.js"
 
 DEFAULT_LAYOUT_CONFIG = {
     'width' : 60,
@@ -790,11 +791,11 @@ def interact(component_class,
     # please find a better way
     DISP.display_html(DISP.HTML("""
         <script src="https://d3js.org/d3.v5.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/elkjs@0.6.2/lib/elk.bundled.js"></script>
+        <script src="{ELKJS_URL}"></script>
         <script src="{assets_root}/js/component.js?v={assets_ts}"></script>
         <script src="{assets_root}/js/visual.js?v={assets_ts}"></script>
         <script src="{assets_root}/js/widgets.js?v={assets_ts}"></script>
-    """.format(assets_root=ASSETS_ROOT,assets_ts=ASSETS_TS)))
+    """.format(assets_root=ASSETS_ROOT,assets_ts=ASSETS_TS,ELKJS_URL=ELKJS_URL)))
 
     component = component_class()
     component.init_interact()
@@ -832,7 +833,7 @@ def generate_html(html_file,component_class,clockgen=False,**kwargs):
 <meta charset="utf-8">
 <title>{component_name}</title>
 <script src="https://d3js.org/d3.v5.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/elkjs@0.6.2/lib/elk.bundled.js"></script>
+<script src="{ELKJS_URL}"></script>
 <script src="{assets_root}/js/component.js?v={assets_ts}"></script>
 <script src="{assets_root}/js/visual.js?v={assets_ts}"></script>
 <script src="{assets_root}/js/widgets.js?v={assets_ts}"></script>
@@ -866,6 +867,7 @@ def generate_html(html_file,component_class,clockgen=False,**kwargs):
         f.write(TEMPLATE.format(
             assets_root=ASSETS_ROOT,
             assets_ts=ASSETS_TS,
+            ELKJS_URL=ELKJS_URL,
             component_name=component.get_gate_name(),
             js=component.generate_js(clockgen=clockgen,**kwargs),
         ))
