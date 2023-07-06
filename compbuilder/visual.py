@@ -67,13 +67,13 @@ def get_wire_name(wire):
     >>> get_wire_name(w.a)
     'a'
     >>> get_wire_name(w(8).a)
-    'a[0..7]'
+    'a[7..0]'
     >>> get_wire_name(w(8).a[2])
     'a[2]'
     >>> get_wire_name(w(8).a[2:3])
     'a[2]'
     >>> get_wire_name(w(8).a[1:5])
-    'a[1..4]'
+    'a[4..1]'
     '''
     if wire.slice:
         start,stop,_ = wire.slice.indices(wire.width)
@@ -85,8 +85,8 @@ def get_wire_name(wire):
     elif start+1 == stop:
         return f'{wire.name}[{start}]'
     else:
-        return f'{wire.name}[{start}..{stop-1}]'
-        
+        return f'{wire.name}[{stop-1}..{start}]'
+
 ################################
 def get_wire_slice(wire):
     '''
@@ -162,7 +162,7 @@ class VisualMixin:
             label = wire.name
 
         if wire.width > 1:
-            label += f'[{0}..{wire.width-1}]'
+            label += f'[{wire.width-1}..0]'
 
         if label:
             port['labels'] = [{
@@ -592,7 +592,7 @@ class VisualMixin:
                     if wslice.start != 0: # single-bit indexing
                         disp_name += f'[{wslice.start}]'
                 else: # multi-bit slicing
-                    disp_name += f'[{wslice.start}..{wslice.stop-1}]'
+                    disp_name += f'[{wslice.stop-1}..{wslice.start}]'
 
                 if pos:
                     px, py = pos
@@ -658,9 +658,9 @@ class VisualMixin:
 
         _, wire_width = wire_key
         net, wire_slice = comp.wiring[wire_key]
-        start = m.group(5)
+        stop = m.group(5)
         mode = m.group(7)
-        stop = m.group(8)
+        start = m.group(8)
         if start is None and stop is None:  # no slicing; take full width
             start = 0
             stop = wire_width
@@ -680,7 +680,7 @@ class VisualMixin:
         if start >= wire_width or stop > wire_width:
             raise ValueError(
                 f'Out-of-bound slicing: {pstr}; '
-                f'allowed range is {0}..{wire_width-1}')
+                f'allowed range is {wire_width-1}..0')
 
         pos = m.group(9)
         if pos is not None:
@@ -764,7 +764,7 @@ def interact(component_class,
         - HalfAdder-1:c
         - Mux16:x[4]
         - Mux16:x[4:8]
-        - Mux16:x[4..7]
+        - Mux16:x[7..4]
 
         In addition, a probe expression can be followed by a pair of integers
         to specify the display position relative to the interactive widget.

@@ -46,8 +46,8 @@ class Net:
                     self.component.name,
                     self.wire,
                     self.net.name,
-                    start,
                     stop-1,
+                    start,
                     )
 
     def __init__(self,name,width,signal=None):
@@ -407,7 +407,7 @@ def wire_repr(self):
     elif stop == start+1:
         suffix = f'[{start}]'
     else:
-        suffix = f'[{start}..{stop-1}]'
+        suffix = f'[{stop-1}..{start}]'
     return f'{self.name}{suffix}'
 
 ##############################################
