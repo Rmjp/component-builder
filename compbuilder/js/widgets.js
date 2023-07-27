@@ -351,8 +351,7 @@ compbuilder.registerWidget('mux2way',
       .attr("height",self.height)
       .attr("width",self.width)
       .attr("stroke","grey")
-      .attr("stroke-width","1px")
-      .attr("fill","lightgrey");
+      .attr("stroke-width","1px");
     self._link = self.svg.append("line")
       .attr("x1",0)
       .attr("y1",0)
@@ -379,8 +378,7 @@ compbuilder.registerWidget('mux4way',
       .attr("height",self.height)
       .attr("width",self.width)
       .attr("stroke","grey")
-      .attr("stroke-width","1px")
-      .attr("fill","lightgrey");
+      .attr("stroke-width","1px");
     self._link = self.svg.append("line")
       .attr("x1",0)
       .attr("y1",0)
@@ -407,8 +405,7 @@ compbuilder.registerWidget('mux8way',
       .attr("height",self.height)
       .attr("width",self.width)
       .attr("stroke","grey")
-      .attr("stroke-width","1px")
-      .attr("fill","lightgrey");
+      .attr("stroke-width","1px");
     self._link = self.svg.append("line")
       .attr("x1",0)
       .attr("y1",0)
@@ -434,8 +431,7 @@ compbuilder.registerWidget('dmux2way',
       .attr("height",self.height)
       .attr("width",self.width)
       .attr("stroke","grey")
-      .attr("stroke-width","1px")
-      .attr("fill","lightgrey");
+      .attr("stroke-width","1px");
     self._link = self.svg.append("line")
       .attr("x1",0)
       .attr("y1",18)
@@ -462,8 +458,7 @@ compbuilder.registerWidget('dmux4way',
       .attr("height",self.height)
       .attr("width",self.width)
       .attr("stroke","grey")
-      .attr("stroke-width","1px")
-      .attr("fill","lightgrey");
+      .attr("stroke-width","1px");
     self._link = self.svg.append("line")
       .attr("x1",0)
       .attr("y1",38)
@@ -490,8 +485,7 @@ compbuilder.registerWidget('dmux8way',
       .attr("height",self.height)
       .attr("width",self.width)
       .attr("stroke","grey")
-      .attr("stroke-width","1px")
-      .attr("fill","lightgrey");
+      .attr("stroke-width","1px");
     self._link = self.svg.append("line")
       .attr("x1",0)
       .attr("y1",65)

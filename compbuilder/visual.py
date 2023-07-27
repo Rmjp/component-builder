@@ -7,7 +7,7 @@ from . import flatten
 from . import Component,Signal,w
 
 ASSETS_ROOT = "https://ecourse.cpe.ku.ac.th/component-builder/compbuilder"
-ASSETS_TS = "20230726-1"
+ASSETS_TS = "20230727-1"
 ELKJS_URL = "https://cdn.jsdelivr.net/npm/elkjs@0.8.2/lib/elk.bundled.js"
 
 DEFAULT_LAYOUT_CONFIG = {
