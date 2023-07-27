@@ -414,6 +414,7 @@ function inputKeyPressed() {
 
 //////////////////////////////////
 function attachInputs(svg,component) {
+  var mapping = {};
   // attach input box for each bus input connector
   svg.selectAll(".connector.in.bus")
     .each(function(lbl) {
@@ -438,7 +439,10 @@ function attachInputs(svg,component) {
       input.net = lbl.wire.net;
       input.component = component;
       input.svg = svg;
+      mapping[input.name] = input;
     });
+
+  return mapping;
 }
 
 //////////////////////////////////
@@ -538,8 +542,19 @@ function create(selector,config,msgdivid) {
       w.component = component;
     }
     attachEvents(svg,component);
-    attachInputs(svg,component);
+    var inputMapping = attachInputs(svg,component);
     component.update();
+
+    if (config.inputScript) {
+      for (var input_val of config.inputScript) {
+        component.update(input_val);
+        for (var pinName in input_val) {
+          if (pinName in inputMapping)
+            inputMapping[pinName].value = input_val[pinName];
+        }
+      }
+    }
+
     if (config.probe) {
       var bound = svg.node().getBoundingClientRect();
       for (var p of config.probe) {

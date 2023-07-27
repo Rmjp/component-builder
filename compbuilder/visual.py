@@ -7,7 +7,7 @@ from . import flatten
 from . import Component,Signal,w
 
 ASSETS_ROOT = "https://ecourse.cpe.ku.ac.th/component-builder/compbuilder"
-ASSETS_TS = "20230727-1"
+ASSETS_TS = "20230727-2"
 ELKJS_URL = "https://cdn.jsdelivr.net/npm/elkjs@0.8.2/lib/elk.bundled.js"
 
 DEFAULT_LAYOUT_CONFIG = {
@@ -615,16 +615,20 @@ class VisualMixin:
                 + ';')
 
         lines.append('')
-        lines.append('var config = {component: component, graph: graph, probe: probe};');
+        input_script = input_script or None
+        lines.append('var config = {')
+        lines.append('  component: component,')
+        lines.append('  graph: graph,')
+        lines.append('  probe: probe,')
+        lines.append('  inputScript: {}'.format(json.dumps(input_script)))
+        lines.append('};')
 
-        if input_script:
-            lines.append('var input_script = {}'.format(json.dumps(input_script)))
 
         return '\n'.join(lines)
 
     ##############################################
     PROBE_EXPR_RE = re.compile(
-        r'^([A-Za-z][A-Za-z0-9]*(-\d+)*):(\w+)(\[(\d+)((:|\.\.)(\d+))?\])?(,\d+,\d+)?$')
+        r'^([A-Za-z][A-Za-z0-9]*(-\d+)*):(\w+)(\[(\d+)((:|\.\.)(\d+))?\])?(:\d+:\d+)?$')
     def resolve_probe(self, pstr):
         """
         Parse and resolve a probe expression.  This component must have been
@@ -688,7 +692,7 @@ class VisualMixin:
 
         pos = m.group(9)
         if pos is not None:
-            pos = [int(c) for c in pos[1:].split(',')]
+            pos = [int(c) for c in pos[1:].split(':')]
 
         net_slice = flatten.remap_slice(net.width, wire_slice, probe_width, probe_slice)
         return comp, wire_name, probe_slice, net, net_slice, pos
@@ -773,7 +777,7 @@ def interact(component_class,
 
         In addition, a probe expression can be followed by a pair of integers
         to specify the display position relative to the interactive widget.
-        For example, the expression 'HalfAdder-1:c,10,50' will show a probe
+        For example, the expression 'HalfAdder-1:c:10:50' will show a probe
         box positioned at (10,50).
 
     expand : list of str, default None
@@ -790,8 +794,9 @@ def interact(component_class,
         one-shot cycle can be produced with the |>| button.
 
     input_script : a list of input signal triggers
-        If available, each member specifies an input pin and its value. For examples:
-        - ['In:1', 'clk:1', 'clk:0', 'In:0']
+        If available, each member specifies an input pin and its value as a
+        dict. For examples:
+        - [{'In':1}, {'addr':0x1234}, {'clk':1}, {'clk':0}]
     """
     import IPython.display as DISP
     global _diagram_id
