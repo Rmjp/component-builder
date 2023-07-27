@@ -7,7 +7,7 @@ from . import flatten
 from . import Component,Signal,w
 
 ASSETS_ROOT = "https://ecourse.cpe.ku.ac.th/component-builder/compbuilder"
-ASSETS_TS = "20220816-1"
+ASSETS_TS = "20230726-1"
 ELKJS_URL = "https://cdn.jsdelivr.net/npm/elkjs@0.8.2/lib/elk.bundled.js"
 
 DEFAULT_LAYOUT_CONFIG = {
@@ -555,6 +555,7 @@ class VisualMixin:
                     clockgen=None,
                     expand=None,
                     probe=None,
+                    input_script=None,
                     **kwargs):
         self.flatten()
         lines = []
@@ -615,6 +616,9 @@ class VisualMixin:
 
         lines.append('')
         lines.append('var config = {component: component, graph: graph, probe: probe};');
+
+        if input_script:
+            lines.append('var input_script = {}'.format(json.dumps(input_script)))
 
         return '\n'.join(lines)
 
@@ -720,6 +724,7 @@ def interact(component_class,
              probe=None,
              expand=None,
              clockgen=False,
+             input_script=None,
              **kwargs):
     """
     Visualizes a component interactively.  At the moment it only works in
@@ -783,6 +788,10 @@ def interact(component_class,
         provides the |> (play) button to generate clock cycles at the rate of
         1 Hz, and the |>|> (fast-forward) button at the rate of 20 Hz.  A
         one-shot cycle can be produced with the |>| button.
+
+    input_script : a list of input signal triggers
+        If available, each member specifies an input pin and its value. For examples:
+        - ['In:1', 'clk:1', 'clk:0', 'In:0']
     """
     import IPython.display as DISP
     global _diagram_id
@@ -811,6 +820,7 @@ def interact(component_class,
                                         probe=probe,
                                         expand=expand,
                                         clockgen=clockgen,
+                                        input_script=input_script,
                                         **kwargs) +
                   '</script>'))
     DISP.display_html(DISP.HTML("""

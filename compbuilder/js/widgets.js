@@ -338,3 +338,170 @@ compbuilder.registerWidget('rom',
     self.rootSvg.updateAll();
   }
 });
+
+/////////////////////////////////////////////////
+compbuilder.registerWidget('mux2way',
+{
+  width: 60,
+  height: 60,
+
+  setup: function() {
+    var self = this;
+    self.svg.append("rect")
+      .attr("height",self.height)
+      .attr("width",self.width)
+      .attr("stroke","grey")
+      .attr("stroke-width","1px")
+      .attr("fill","lightgrey");
+    self._link = self.svg.append("line")
+      .attr("x1",0)
+      .attr("y1",0)
+      .attr("x2",self.width)
+      .attr("y2",self.height/2)
+      .attr("style", "stroke:rgb(128,0,0);stroke-width:5");
+  },
+
+  update: function() {
+    var self = this;
+    self._link.attr("y1", self.getPinValue.sel()*17 + 13);
+  }
+});
+
+/////////////////////////////////////////////////
+compbuilder.registerWidget('mux4way',
+{
+  width: 60,
+  height: 120,
+
+  setup: function() {
+    var self = this;
+    self.svg.append("rect")
+      .attr("height",self.height)
+      .attr("width",self.width)
+      .attr("stroke","grey")
+      .attr("stroke-width","1px")
+      .attr("fill","lightgrey");
+    self._link = self.svg.append("line")
+      .attr("x1",0)
+      .attr("y1",0)
+      .attr("x2",self.width)
+      .attr("y2",self.height/2)
+      .attr("style", "stroke:rgb(128,0,0);stroke-width:5");
+  },
+
+  update: function() {
+    var self = this;
+    self._link.attr("y1", self.getPinValue.sel()*22 + 16);
+  }
+});
+
+/////////////////////////////////////////////////
+compbuilder.registerWidget('mux8way',
+{
+  width: 60,
+  height: 240,
+
+  setup: function() {
+    var self = this;
+    self.svg.append("rect")
+      .attr("height",self.height)
+      .attr("width",self.width)
+      .attr("stroke","grey")
+      .attr("stroke-width","1px")
+      .attr("fill","lightgrey");
+    self._link = self.svg.append("line")
+      .attr("x1",0)
+      .attr("y1",0)
+      .attr("x2",60)
+      .attr("y2",120)
+      .attr("style", "stroke:rgb(128,0,0);stroke-width:5");
+  },
+
+  update: function() {
+    var self = this;
+    self._link.attr("y1", self.getPinValue.sel()*25 + 20);
+  }
+});
+/////////////////////////////////////////////////
+compbuilder.registerWidget('dmux2way',
+{
+  width: 60,
+  height: 60,
+
+  setup: function() {
+    var self = this;
+    self.svg.append("rect")
+      .attr("height",self.height)
+      .attr("width",self.width)
+      .attr("stroke","grey")
+      .attr("stroke-width","1px")
+      .attr("fill","lightgrey");
+    self._link = self.svg.append("line")
+      .attr("x1",0)
+      .attr("y1",18)
+      .attr("x2",self.width)
+      .attr("y2",self.height/2)
+      .attr("style", "stroke:rgb(128,0,0);stroke-width:5");
+  },
+
+  update: function() {
+    var self = this;
+    self._link.attr("y2", self.getPinValue.sel()*22 + 18);
+  }
+});
+
+/////////////////////////////////////////////////
+compbuilder.registerWidget('dmux4way',
+{
+  width: 60,
+  height: 120,
+
+  setup: function() {
+    var self = this;
+    self.svg.append("rect")
+      .attr("height",self.height)
+      .attr("width",self.width)
+      .attr("stroke","grey")
+      .attr("stroke-width","1px")
+      .attr("fill","lightgrey");
+    self._link = self.svg.append("line")
+      .attr("x1",0)
+      .attr("y1",38)
+      .attr("x2",self.width)
+      .attr("y2",self.height/2)
+      .attr("style", "stroke:rgb(128,0,0);stroke-width:5");
+  },
+
+  update: function() {
+    var self = this;
+    self._link.attr("y2", self.getPinValue.sel()*26 + 20);
+  }
+});
+
+/////////////////////////////////////////////////
+compbuilder.registerWidget('dmux8way',
+{
+  width: 60,
+  height: 200,
+
+  setup: function() {
+    var self = this;
+    self.svg.append("rect")
+      .attr("height",self.height)
+      .attr("width",self.width)
+      .attr("stroke","grey")
+      .attr("stroke-width","1px")
+      .attr("fill","lightgrey");
+    self._link = self.svg.append("line")
+      .attr("x1",0)
+      .attr("y1",65)
+      .attr("x2",60)
+      .attr("y2",120)
+      .attr("style", "stroke:rgb(128,0,0);stroke-width:5");
+  },
+
+  update: function() {
+    var self = this;
+    self._link.attr("y2", self.getPinValue.sel()*23 + 20);
+  }
+});
