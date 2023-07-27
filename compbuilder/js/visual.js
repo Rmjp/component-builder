@@ -549,8 +549,10 @@ function create(selector,config,msgdivid) {
       for (var input_val of config.inputScript) {
         component.update(input_val);
         for (var pinName in input_val) {
-          if (pinName in inputMapping)
-            inputMapping[pinName].value = input_val[pinName];
+          var wiring = component.parts[0].wiring[pinName];
+          if (wiring.net.width > 1) {
+            inputMapping[pinName].value = signalValueHex(input_val[pinName],wiring.net.width);
+          }
         }
       }
     }
