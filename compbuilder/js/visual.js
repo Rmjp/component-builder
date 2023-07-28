@@ -269,7 +269,7 @@ function drawNode(svg,node,component) {
 
 //////////////////////////////////
 function updateAllWrapper(svg,component) {
-  function updateAll() {
+  function updateAll(updateBusInputs) {
     svg.selectAll("path.edge")
       .classed("T", function(e) {
         return signalWidth(e.wire) == 1 &&
@@ -294,6 +294,14 @@ function updateAllWrapper(svg,component) {
       if (n.update) n.update();
     }
     updateTooltips();
+
+    if (updateBusInputs) {
+      var mapping = svg.busInputMapping;
+      for (var pinName in mapping) {
+        var net = component.parts[0].wiring[pinName].net;
+        mapping[pinName].value = signalValueHex(net.signal,net.width);
+      }
+    }
   }
 
   return updateAll;
@@ -413,7 +421,7 @@ function inputKeyPressed() {
 }
 
 //////////////////////////////////
-function attachInputs(svg,component) {
+function attachBusInputs(svg,component) {
   var mapping = {};
   // attach input box for each bus input connector
   svg.selectAll(".connector.in.bus")
@@ -442,7 +450,8 @@ function attachInputs(svg,component) {
       mapping[input.name] = input;
     });
 
-  return mapping;
+  // save mapping into svg for later use
+  svg.busInputMapping = mapping;
 }
 
 //////////////////////////////////
@@ -542,18 +551,12 @@ function create(selector,config,msgdivid) {
       w.component = component;
     }
     attachEvents(svg,component);
-    var inputMapping = attachInputs(svg,component);
+    attachBusInputs(svg,component);
     component.update();
 
     if (config.inputScript) {
       for (var input_val of config.inputScript) {
         component.update(input_val);
-        for (var pinName in input_val) {
-          var wiring = component.parts[0].wiring[pinName];
-          if (wiring.net.width > 1) {
-            inputMapping[pinName].value = signalValueHex(input_val[pinName],wiring.net.width);
-          }
-        }
       }
     }
 
@@ -571,8 +574,18 @@ function create(selector,config,msgdivid) {
       }
     }
     svg.updateAll = updateAllWrapper(svg,component);
-    svg.updateAll();
+    svg.updateAll(true);
+
+    component.svg = svg;
+    component.visualUpdate = visualUpdate;
   });
+}
+
+//////////////////////////////////
+function visualUpdate(inputs) {
+  // call component.update() along with all visual updates
+  this.update(inputs);
+  this.svg.updateAll(true);
 }
 
 //////////////////////////////////
