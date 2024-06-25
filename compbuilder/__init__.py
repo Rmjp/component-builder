@@ -33,7 +33,7 @@ class Signal:
 
     def resize(self, new_width):
         return Signal(self.value, new_width)
-    
+
     def __eq__(self, other):
         if other == None:
             return False
@@ -55,11 +55,11 @@ class Signal:
             return self.value.__format__(format_spec)
         else:
             return '{:X}'.format(self.value)
-    
+
     @staticmethod
     def from_string(s):
         return Signal(int(s,2), len(s))
-    
+
     def slice(self, s):
         rev = str(self)[::-1]
         return Signal.from_string((rev[s])[::-1])
@@ -109,11 +109,11 @@ class SimulationMixin:
 
     def extract_nets(self):
         self.initialize()
-        
+
         base_components = []
         all_components = []
         ccount = [0]
-        
+
         def assign_component_cid(component):
             ccount[0] += 1
             component.cid = ccount[0]
@@ -121,7 +121,7 @@ class SimulationMixin:
             for c in component.internal_components:
                 c.parent_component = component
                 assign_component_cid(c)
-        
+
         def extract_base_components(component):
             all_components.append(component)
             if component.internal_components == []:
@@ -146,7 +146,7 @@ class SimulationMixin:
                             'is_constant': False,
                             'actual_wire': None}]
             terminated[k] = False
-            
+
         component = self
         while component.parent_component:
             in_out_keys = component.parent_component.get_in_keys() + component.parent_component.get_out_keys()
@@ -180,13 +180,13 @@ class SimulationMixin:
 
     def sum_wire_width(self, wires):
         return sum([w.width for w in wires])
-    
+
     def build_sim_graph(self):
         base_components, all_components = self.extract_nets()
 
         self.sim_base_components = base_components
         self.sim_all_components = all_components
-        
+
         nodes = {}
         self.sim_edges = {}
 
@@ -206,7 +206,7 @@ class SimulationMixin:
 
         for c in all_components:
             c.wire_map = c.trace_wire()
-        
+
         for c in base_components:
             if c.is_clocked_component:
                 ncount += 1
@@ -214,7 +214,7 @@ class SimulationMixin:
                 in_node.is_pair_node = True
                 in_node.is_input_node = True
                 nodes[in_node.id] = in_node
-                
+
                 ncount += 1
                 out_node = self.SimNode(ncount, c)
                 out_node.is_pair_node = True
@@ -257,7 +257,7 @@ class SimulationMixin:
 
         self.sim_nodes = nodes
         self.sim_n = len(nodes)
-        
+
         self.sim_graph = {
             'nodes': self.sim_nodes,
             'edges': self.sim_edges,
@@ -292,13 +292,13 @@ class SimulationMixin:
                                         messages.append(f' - {c} [IN] inside {u.get_top_level_components(self.sim_loop_report_levels)} - {ek}')
                                     else:
                                         messages.append(f' - {c} [OUT] inside {u.get_top_level_components(self.sim_loop_report_levels)} - {ek}')
-                                        
+
                             raise ComponentError(message='\n'.join(messages))
                     else:
                         v.dfs_parent = u
                         v.parent_edge_key = ek
                         dfs(v)
-            
+
             u.is_returned = True
 
         for uid in self.sim_nodes:
@@ -317,7 +317,7 @@ class SimulationMixin:
 
     def top_sort(self):
         self.check_loop()
-        
+
         self.sim_topo_ordering = []
 
         for uid in self.sim_nodes:
@@ -336,7 +336,7 @@ class SimulationMixin:
             e = self.sim_edges[ek]
             e['in_signals'] = len(e['src'])
             e['current_in_count'] = 0
-                    
+
         for key in self.get_in_keys():
             try:
                 e = self.sim_edges[(self.cid, key)]
@@ -344,7 +344,7 @@ class SimulationMixin:
                 raise ComponentError(errors=e) from e
             for vid, wire_width in e['dest']:
                 self.sim_nodes[vid].current_indegree -= wire_width
-                    
+
         src_list = []
         added_set = set()
 
@@ -353,7 +353,7 @@ class SimulationMixin:
             if u.current_indegree == 0:
                 src_list.append(u)
                 added_set.add(u.id)
-                
+
         ncount = 0
         while len(src_list)!=0:
             ncount += 1
@@ -361,7 +361,7 @@ class SimulationMixin:
             src_list = src_list[1:]
 
             #print('Added:', u.component, u.get_top_level_components(2))
-            
+
             self.sim_topo_ordering.append(u)
 
             for ek in u.out_edge_keys:
@@ -396,12 +396,12 @@ class SimulationMixin:
                                 messages.append(f'- {u.id}: {u.component} [IN] (wait: {u.current_indegree}) (inside {component_parents}) in-wires: {[w["key"] for w in u.in_mapped_wires]}')
                             else:
                                 messages.append(f'- {u.id}: {u.component} [OUT] (wait: {u.current_indegree}) (inside {component_parents}) in-wires: {[w["key"] for w in u.in_mapped_wires]}')
-                                
+
                     elif err_count == self.sim_loop_max_num_report_primitives:
                         messages.append('.... too many ....')
                     err_count += 1
                     parent_set.add(component_parents)
-                    
+
             if err_count > self.sim_loop_max_num_report_primitives:
                 messages.append(f'(for {err_count} components)')
 
@@ -412,7 +412,7 @@ class SimulationMixin:
             messages.append('All top level components:')
             for c in self.internal_components:
                 messages.append(f'- {c}')
-            
+
             raise ComponentError(message='\n'.join(messages))
 
     def get_signal_from_mapped_wire(self, signal, component_wire, mapped_wire):
@@ -431,7 +431,7 @@ class SimulationMixin:
         component.trace_input_signals = self.get_component_input(component)
         component.trace_output_signals = self.get_component_output(component)
         component.trace_signals = {**component.trace_input_signals, **component.trace_output_signals}
-    
+
     def extract_all_component_trace(self):
         for c in self.sim_all_components + [self]:
             self.extract_all_component_trace(c)
@@ -443,15 +443,15 @@ class SimulationMixin:
         return self.get_signal_from_mapped_wire(self.edge_values.get(edge_key, None),
                                                 wire,
                                                 mapped_wire)
-                
+
     def get_component_input(self, component):
         return {wire.name:self.get_component_wire_signal(component, wire)
                 for wire in component.IN}
-    
+
     def get_component_output(self, component):
         return {wire.name:self.get_component_wire_signal(component, wire)
                 for wire in component.OUT}
-    
+
     def set_component_output(self, component, output):
         for component_wire in component.OUT:
             key = component_wire.get_key()
@@ -478,7 +478,7 @@ class SimulationMixin:
     def simulate(self, **kwargs):
         self.init_simulator()
         self.init_component_input_edge_value(kwargs)
-        
+
         for u in self.sim_topo_ordering:
             component = u.component
             if (not u.is_pair_node) or (u.is_input_node):
@@ -517,7 +517,7 @@ class Component(SimulationMixin):
 
     def init_parts(self):
         pass
-            
+
     def __init__(self, **kwargs):
         self.init_parts()
 
@@ -547,7 +547,7 @@ class Component(SimulationMixin):
     def init_interact(self):
         self.initialize()
         self.add_clk_wire()
-    
+
     def add_clk_wire(self):
         if self.is_clocked_component:
             if 'clk' not in [w.name for w in self.IN]:
@@ -572,18 +572,18 @@ class Component(SimulationMixin):
             for node in self.nodes.values():
                 if node.component.is_clocked_component:
                     del node.in_wires['clk']
-            
+
             for c in self.internal_components:
                 c.restore_clk_wire()
 
             self.is_clk_wire_added = False
-    
+
     def get_in_keys(self):
         return [w.get_key() for w in self.IN]
-    
+
     def get_out_keys(self):
         return [w.get_key() for w in self.OUT]
-    
+
     def get_or_create_edge(self, estr):
         if estr in self.edges:
             e = self.edges[estr]
@@ -602,7 +602,7 @@ class Component(SimulationMixin):
                 return Wire(wire.name, widths[wire.name], wire.slice, wire.constant_value)
             else:
                 return wire
-        
+
         widths = {}
         all_wires = self.IN + self.OUT
         for component in self.PARTS:
@@ -613,7 +613,7 @@ class Component(SimulationMixin):
                 except:
                     raise ComponentError(message=f'Error wire not found when normalizing wire width of component {component} inside {self}.')
                 all_wires.append(actual_wire)
-            
+
         for w in all_wires:
             if (w.name not in widths) or (widths[w.name] == 1):
                 widths[w.name] = w.width
@@ -638,14 +638,14 @@ class Component(SimulationMixin):
         e = self.get_or_create_edge(actual_key)
         e['dest'].append(node.id)
         node.in_list.append(e)
-                
+
     def add_wire_to_node_out_edge(self, node, wire, component):
         key = wire.get_key()
         actual_wire = component.get_actual_wire(wire.name)
         actual_key = actual_wire.get_key()
         node.out_dict[key] = actual_key
         node.out_wires[key] = actual_wire
-                
+
         e = self.get_or_create_edge(actual_key)
         e['src'].append(node.id)
         node.out_list.append(e)
@@ -653,13 +653,13 @@ class Component(SimulationMixin):
     def build_graph(self):
         if not getattr(self, 'PARTS', None):
             self.PARTS = []
-        
+
         self.nodes = {}
         self.edges = {}
         self.internal_components = []
         self.n = len(self.PARTS)
         self.clocked_n = 0
-        
+
         ncount = 0
         for p in self.PARTS:
             ncount += 1
@@ -673,7 +673,7 @@ class Component(SimulationMixin):
                 self.is_clocked_component = True
                 self.clocked_components.append(component)
                 self.clocked_n += 1
-            
+
             self.internal_components.append(component)
 
             node = self.Node(nid, component)
@@ -684,7 +684,7 @@ class Component(SimulationMixin):
 
             for wire in component.IN:
                 self.add_wire_to_node_in_edge(node, wire, component)
-                
+
             for wire in component.OUT:
                 self.add_wire_to_node_out_edge(node, wire, component)
 
@@ -697,7 +697,7 @@ class Component(SimulationMixin):
                     u.indegree += len(e['src'])
                 else:
                     u.indegree += 1
-                
+
             for nid in e['src']:
                 u = self.nodes[nid]
                 u.outdegree += len(e['dest'])
@@ -718,7 +718,7 @@ class Component(SimulationMixin):
 
     def set_actual_wire(self, estr, wire):
         self.wire_assignments[estr] = wire    
-        
+
     def validate_config(self):
         for wire in self.IN + self.OUT:
             name = wire.name
@@ -734,9 +734,9 @@ class Component(SimulationMixin):
 
         self.normalize_component_wire_widths()
         self.build_graph()
-        
+
         self.set_constants()
-            
+
         self.is_initialized = True
 
     def propagate_output(self, u, output):
@@ -754,12 +754,12 @@ class Component(SimulationMixin):
                 if w.is_constant:
                     estr = w.get_key()
                     self.edges[estr]['value'] = w.get_constant_signal()
-            
+
     def process(self, **kwargs):
         self.initialize()
 
         self.saved_input_kwargs = kwargs
-        
+
         for wire in self.IN:
             key = wire.get_key()
             self.edges[key]['value'] = kwargs[wire.name]
@@ -783,14 +783,14 @@ class Component(SimulationMixin):
 
         if self.PARTS == []:
             return {}
-        
+
         #if not self.is_clocked_component:
         #    return {}
-        
+
         #kwargs = self.saved_input_kwargs
 
         print('process deferred >', self, kwargs)
-        
+
         for wire in self.IN:
             key = wire.get_key()
             if kwargs != None:
@@ -816,14 +816,14 @@ class Component(SimulationMixin):
                 output = u.component._process(**input_kwargs)
             #if str(type(self)) == "<class 'test.test_ram.RAM64'>":
             print('-->', u.component, input_kwargs, output)
-            
+
             self.propagate_output(u, output)
 
         try:
             return {wire.name:self.edges[wire.get_key()]['value'] for wire in self.OUT}
         except KeyError as e:
             raise ComponentError(errors=e) from e
-    
+
     def _process(self, **kwargs):
         for f in self.preprocessing_hooks.values():
             f(self, kwargs)
@@ -837,9 +837,9 @@ class Component(SimulationMixin):
         self.trace_input_signals = kwargs
         self.trace_output_signals = output
         self.trace_signals = {**kwargs, **self.trace_output_signals}
-            
+
         return output
-    
+
     def _process_deffered(self, **kwargs):
         if kwargs == {}:
             kwargs = self.saved_input_kwargs
@@ -858,16 +858,16 @@ class Component(SimulationMixin):
         self.trace_input_signals = kwargs
         self.trace_output_signals = output
         self.trace_signals = {**kwargs, **self.trace_output_signals}
-            
+
         return output
-    
+
     def eval(self, **kwargs):
         return self.simulate(**kwargs)
-    
+
         self._process_deffered(**kwargs)
         print(self,'DEFFERED')
         return self._process(**kwargs)
-    
+
     def eval_single(self, **kwargs):
         output = self.eval(**kwargs)
         if len(output.keys()) != 1:
@@ -879,10 +879,10 @@ class Component(SimulationMixin):
 
     def add_preprocessing_hook(self, key, f):
         self.preprocessing_hooks[key] = f
-    
+
     def add_postprocessing_hook(self, key, f):
         self.postprocessing_hooks[key] = f
-    
+
     def __getitem__(self, key):
         self.initialize()
         index_items = key.split('-')
@@ -904,8 +904,8 @@ class Component(SimulationMixin):
             raise ComponentError(message='Internal component access error gate type mismatch: ' + key + ' with ' + component.get_gate_name())
 
         return component
-    
-    
+
+
 class Wire:
     def __init__(self, name, width=1, slice=None, constant_value=None):
         self.name = name
@@ -917,7 +917,7 @@ class Wire:
         else:
             self.is_constant = False
             self.constant_value = None
-        
+
     def __str__(self):
         if self.slice:
             return '{}:{}[{}-{}]'.format(self.name, self.width, self.slice.start, self.slice.stop)
@@ -926,7 +926,7 @@ class Wire:
 
     def __repr__(self):
         return self.__str__()
-    
+
     def get_key(self):
         return (self.name, self.width)
 
@@ -948,7 +948,7 @@ class Wire:
         else:
             start,stop,_ = self.slice.indices(self.width)
             return stop - start
-        
+
     def slice_signal(self, signal):
         if self.slice:
             return signal.slice(self.slice)
@@ -964,7 +964,7 @@ class Wire:
             return signal
         else:
             return Signal(self.constant_value, self.width)
-        
+
     def save_to_signal(self, signal, value_signal):
         if self.is_constant:
             raise WireError(message='Cannot save to constant wires')
@@ -975,18 +975,18 @@ class Wire:
             return signal
         else:
             return value_signal
-    
+
 class WireFactory:
     __instances = None
 
     CONSTANT_FUNCTIONS = {
         'T': lambda width: (1 << width) - 1,
         'F': lambda width: 0,
-        'one': lambda width: (1 << width) - 1,
-        'zero': lambda width: 0,
-        'int_one': lambda width: 1,
+        #'one': lambda width: (1 << width) - 1,
+        #'zero': lambda width: 0,
+        #'int_one': lambda width: 1,
     }
-    
+
     @staticmethod
     def get_instance(width=1):
         if WireFactory.__instances == None:
@@ -999,7 +999,7 @@ class WireFactory:
 
     def __call__(self, width):
         return WireFactory.get_instance(width)
-    
+
     def __getattr__(self, name):
         if name in WireFactory.CONSTANT_FUNCTIONS:
             value = WireFactory.CONSTANT_FUNCTIONS[name](self.width)
@@ -1010,7 +1010,7 @@ class WireFactory:
             return wire_function
         else:
             return Wire(name, self.width)
-    
+
     def __init__(self, width=1):
         if (WireFactory.__instances != None) and (width in WireFactory.__instances):
             raise Exception('You should not try to instatiate WireFactory directly')
@@ -1021,6 +1021,6 @@ class WireFactory:
             WireFactory.__instances = {}
 
         WireFactory.__instances[width] = self
-        
+
 w = WireFactory.get_instance()
 
