@@ -1030,7 +1030,6 @@ try:
         import IPython.display
         display_normal = IPython.display.display
         def display_comp(html: HTML):
-            print(html.data)
             if isinstance(html, HTML):
                 global display_str
                 html = html.data
