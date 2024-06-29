@@ -1025,39 +1025,43 @@ class WireFactory:
 w = WireFactory.get_instance()
 
 try:
-    from IPython.display import HTML, IFrame
-    import IPython.display
-    display_normal = IPython.display.display
-    def display_comp(html: HTML):
-        if isinstance(html, HTML):
-            global display_comp
-            html = html.data
-            display_comp += "\n" + html
+    def vscode_display_setup():
+        from IPython.display import HTML
+        import IPython.display
+        display_normal = IPython.display.display
+        def display_comp(html: HTML):
+            print(html.data)
+            if isinstance(html, HTML):
+                global display_str
+                html = html.data
+                display_str += "\n" + html
 
-    IPython.display.display = display_comp
+        IPython.display.display_html = display_comp
 
-    def display_html_in_iframe(html_content, width='100%', height='100px'):
-        iframe_html = f'''
-        <iframe
-            width="{width}"
-            height="{height}"
-            srcdoc="{html_content.replace('"', '&quot;')}"
-            frameborder="0"
-        ></iframe>
-        '''
-        display_normal(HTML(iframe_html))
-    from IPython import get_ipython
+        def display_html_in_iframe(html_content, width='100%', height='100px'):
+            iframe_html = f'''
+            <iframe
+                width="{width}"
+                height="{height}"
+                srcdoc="{html_content.replace('"', '&quot;')}"
+                frameborder="0"
+            ></iframe>
+            '''
+            display_normal(HTML(iframe_html))
+        from IPython import get_ipython
 
-    def last_call_display(result):
-        global display_comp
-        # print(display_comp)
-        if display_comp != "":
-            display_html_in_iframe(display_comp)
-            display_comp = ""
+        global display_str
+        display_str = ""
 
-    ip = get_ipython()
-    ip.events.register('last_call_display', last_call_display)
-    display_comp = ""
+        def last_call_display(result):
+            global display_str
+            # print(display_comp)
+            if display_str != "":
+                display_html_in_iframe(display_str)
+                display_str = ""
+
+        ip = get_ipython()
+        ip.events.register('post_run_cell', last_call_display)
 except ImportError as e:
     print('import Error', e)
 except Exception as e:
