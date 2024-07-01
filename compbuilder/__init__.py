@@ -1026,16 +1026,23 @@ w = WireFactory.get_instance()
 
 try:
     def vscode_display_setup():
-        from IPython.display import HTML
+        from IPython.display import HTML, Javascript
         import IPython.display
         display_normal = IPython.display.display
         def display_comp(html: HTML):
+            global display_str
             if isinstance(html, HTML):
-                global display_str
                 html = html.data
                 display_str += "\n" + html
+            if isinstance(html, Javascript):
+                lib = html.lib
+                for l in lib:
+                    display_str += "<script src='" + l + "'></script>"
+                data = html.data
+                display_str += "<script>" + data + "</script>"
 
         IPython.display.display_html = display_comp
+        IPython.display.display_javascript = display_comp
 
         def display_html_in_iframe(html_content, width='100%', height='100px'):
             iframe_html = f'''
