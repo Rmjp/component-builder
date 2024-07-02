@@ -800,16 +800,23 @@ def interact(component_class,
     """
     import IPython.display as DISP
     global _diagram_id
-
+    DISP.display_html(DISP.HTML("""
+        <link rel="stylesheet" type="text/css" href="{assets_root}/css/styles.css?v={assets_ts}" />
+        <div id="interact-diagram-{diagram_id}"></div>
+    """.format(assets_root=ASSETS_ROOT, assets_ts=ASSETS_TS, diagram_id=_diagram_id)))
+    DISP.display_javascript(DISP.Javascript(data="""   
+    define = undefined;      
+                                                                         
+"""))
     # XXX specifying js and css file locations here is very hacky;
     # please find a better way
-    DISP.display_html(DISP.HTML("""
-        <script src="https://d3js.org/d3.v5.js"></script>
-        <script src="{ELKJS_URL}"></script>
-        <script src="{assets_root}/js/component.js?v={assets_ts}"></script>
-        <script src="{assets_root}/js/visual.js?v={assets_ts}"></script>
-        <script src="{assets_root}/js/widgets.js?v={assets_ts}"></script>
-    """.format(assets_root=ASSETS_ROOT,assets_ts=ASSETS_TS,ELKJS_URL=ELKJS_URL)))
+    # DISP.display_html(DISP.HTML("""
+    #     <script src="https://d3js.org/d3.v5.js"></script>
+    #     <script src="{ELKJS_URL}"></script>
+    #     <script src="{assets_root}/js/component.js?v={assets_ts}"></script>
+    #     <script src="{assets_root}/js/visual.js?v={assets_ts}"></script>
+    #     <script src="{assets_root}/js/widgets.js?v={assets_ts}"></script>
+    # """.format(assets_root=ASSETS_ROOT,assets_ts=ASSETS_TS,ELKJS_URL=ELKJS_URL)))
 
     component = component_class()
     component.init_interact()
@@ -828,14 +835,12 @@ def interact(component_class,
                                         input_script=input_script,
                                         **kwargs) +
                   '</script>'))
-    DISP.display_html(DISP.HTML("""
-        <link rel="stylesheet" type="text/css" href="{assets_root}/css/styles.css?v={assets_ts}" />
-        <div id="interact-diagram-{diagram_id}"></div>
-        <script>
-          compbuilder.create("#interact-diagram-{diagram_id}",config);
-        </script>
-    """.format(assets_root=ASSETS_ROOT, assets_ts=ASSETS_TS, diagram_id=_diagram_id)))
-
+    assets_root = ASSETS_ROOT
+    assets_ts = ASSETS_TS
+    libs = ["https://d3js.org/d3.v5.js", f"{ELKJS_URL}", f"{assets_root}/js/component.js?v={assets_ts}", f"{assets_root}/js/visual.js?v={assets_ts}", f"{assets_root}/js/widgets.js?v={assets_ts}"]
+    DISP.display_javascript(DISP.Javascript(lib=libs, data="""                                      
+"""))
+    DISP.display_javascript(DISP.Javascript(data=f"""compbuilder.create("#interact-diagram-{_diagram_id}",config);"""))
     _diagram_id += 1
 
 
